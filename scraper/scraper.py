@@ -1,40 +1,64 @@
-# import urllib.request # works with ftp servers
 import requests
 from bs4 import BeautifulSoup
 
-def openPage(url):
+def open_page(url):
     session = requests.Session()
     page = session.get(url).text
     return BeautifulSoup(page, "lxml")
 
-
 repo_link = "https://www.doomworld.com/idgames/levels/doom/"
 # list of subcategories to be avoided
 excluded_list = ["deathmatch","Ports","megawads"]
-soup = openPage(repo_link)
-# Fetches subcategory url in doomworld and proceeds for just one level down the tree. 
-links = soup.find_all('a')
-for l in links:
+level_page = open_page(repo_link)
+# Fetching subcategory url in doomworld 
+level_page_links = level_page.find_all('a')
+for l in level_page_links:
+    # Finding urls that contain this path
     if l.has_attr('href') and "idgames/levels/doom" in l['href']:
-        url = l['href']
+        cate_path = l['href']
         
-        if any(x in url for x in excluded_list):
+        # Skipping excluded categories
+        if any(x in cate_path for x in excluded_list):
             continue
 
-        id = l['href'].split('/')[-2]
-        # print(id,url)
+        cate_id = l['href'].split('/')[-2]
 
-        suburl = repo_link + id + "/"
-        subsoup = openPage(suburl)
-        print(suburl)
-        sublinks = subsoup.find_all('a')
-        for sl in sublinks:
-            if sl.has_attr('href') and sl['href'].startswith("levels/doom"):
-                uri = sl['href']
-                name = sl.contents[0]
-                id = sl['href'].split('/')[-1]
-                print(id,uri)
+        cate_url = repo_link + cate_id + "/"
+        # print(cate_url)
+        # Fetching links of levels in subcategory page
+        cate_page = open_page(cate_url)
+        cate_page_links = cate_page.find_all('a')
+        for c in cate_page_links:
+            if c.has_attr('href') and c['href'].startswith("levels/doom"):
+                map_path = c['href']
+                map_id = c['href'].split('/')[-1]
+                # print(map_id,map_path)
 
-    
+                # Fetching download links of WAD files
+                found_files = []
+                map_url = cate_url + map_id
+                print ("Opening category page: " + map_url)
+                map_page = open_page(map_url)
+                # print(map_page)
+                # Find the div containing the pagination design pattern and the file links
+                mainDiv = map_page.findAll("table", {"class": "download"})[0]
+                file_page_links = [entry.find_all("a")[0] for entry in mainDiv.find_all("ul", {"class":"square"})]
+                for entry in mainDiv.find_all("ul", {"class":"square"}):
+                    print("entries",entry)
+                found_files = found_files + [fpl['href'] for fpl in file_page_links]
+                print("Found {} more files".format(str(len(found_files))))
+                print(found_files)
 
+# for ftp servers
 # urllib.request.urlretrieve('ftp://ftp.fu-berlin.de/pc/games/idgames/levels/doom/0-9/0.zip', './scraped/doom/0.zip')
+
+# for http servers
+# url = "https://www.gamers.org/pub/idgames/levels/doom/0-9/0.zip"
+# local_path = "./"
+# session = requests.Session()
+# r = session.get(url)
+# if r.status_code != 200:
+#     print ("Failed to download the file: " + url)
+# filename = r.url.split('/')[-1]
+# with open("./"+filename, "wb") as file:
+#     file.write(r.content)
