@@ -1,6 +1,10 @@
 import urllib.request
+import json
+import os
 import requests
 from bs4 import BeautifulSoup
+import re
+import zipfile
 
 
 def open_page(url):
@@ -38,121 +42,125 @@ def fetch_level_links(subcate_urls):
                 level_urls += [subcate + level_id]
     return level_urls
 
-def fetch_level_info(level_urls):
-    for level in level_urls:
-        level_page = open_page(level)
-        info_table = level_page.findAll('table', {'class': 'filelist'})
-        print(info_table)
+def fetch_level_info(level_url):
+    level_page = open_page(level_url)
+    info_list = level_page.findAll('td', {'class': re.compile('filelist_field')})
+    stars = info_list[-1].findAll('img', {'src': re.compile('star')})
+    ratings = 0
+    for x in stars:
+        if x['src'] == 'images/star.gif':
+            ratings+=1
+        elif x['src'] == 'images/halfstar.gif':
+            ratings+=0.5
+        elif 'empty' not in x['src'] :
+            ratings+=0.25
+    level_info = dict()
+    level_info['id'] = level_url.split('/')[-1]
+    level_info['name'] = info_list[0].contents[0][1:]
+    level_info['url'] = level_url
+    level_info['rating_value'] = ratings
+    level_info['rating_count'] = int(re.findall(r'\d+', info_list[-1].contents[-1])[0])
+    return level_info
+    # scraped_info.append(level_info)
+    # with open(json_path, 'w') as jsonfile:
+    #    json.dump(scraped_info, jsonfile)
 
 
-def download_wad(level_urls, download_path):
-    for level in level_urls:
-        level_page = open_page(level)
-        # Finds the table containing the WAD download links
-        mainDiv = level_page.findAll('table', {'class': 'download'})[0]
-        level_page_links = [entry.find_all('a') for entry in mainDiv.find_all('ul', {'class':'square'})][0]
-        for file in level_page_links:
-            filename = file['href'].split('/')[-1]
-            link = file['href']
-            # for ftp servers
-            if link[0] =='f':
-                try:
-                    urllib.request.urlretrieve(file['href'], download_path + filename)
-                    break
-                except Exception as e:
-                    print(e)
-            else:
-                # for http servers
-                r = session.get(link)
-                if r.status_code != 200:
-                    print ('Failed to download the file: ' + link)
-                    continue
-                with open(download_path + filename, 'wb') as file:
-                    file.write(r.content)
-                    break
+
+def download_wad(level_url, download_path):
+    level_page = open_page(level_url)
+    # Finds the table containing the WAD download links
+    mainDiv = level_page.findAll('table', {'class': 'download'})[0]
+    level_page_links = [entry.find_all('a') for entry in mainDiv.find_all('ul', {'class':'square'})][0]
+    downloaded = False
+    for file in level_page_links:
+        link = file['href']
+        filename = link.split('/')[-1]
+        file_id = level_url.split('/')[-1]
+        # print(filename,link,level_url,file_id)
+        file_path = download_path + "/" + file_id + "/"
+        if os.path.exists(file_path):
+            if os.path.exists(file_path + filename):
+                return False
+        else:
+            os.makedirs(file_path)
+        # for ftp servers
+        if link[0:3] =='ftp':
+            try:
+                urllib.request.urlretrieve(link, file_path + filename)
+                downloaded = True
+                break
+            except Exception as e:
+                print ('Failed to download the file: ' + link)
+        else:
+            # for http servers
+            r = session.get(link)
+            if r.status_code != 200:
+                print ('Failed to download the file: ' + link)
+                continue
+            with open(file_path + filename, 'wb') as file:
+                file.write(r.content)
+                downloaded = True
+                break
+    if downloaded:
+        # Extract ZIP files
+        with zipfile.ZipFile(file_path + filename, 'r') as zip_ref:
+            zip_ref.extractall(file_path)
+    return downloaded
+
+    # Need to return true if downloaded else false to see if the info needs to be saved into the doom json file
+    
 
 
 
 session = requests.Session()
 archived_cate = 'https://www.doomworld.com/idgames/levels/doom/'
-# list of subcategories to be avoided
+# List of subcategories to be avoided
 excluded_list = ['deathmatch','Ports','megawads']
-save_path = "../dataset/scraped/doom/"
+save_path = '../dataset/scraped/doom/'
+
+
+# Create dataset directory
+if os.path.exists(save_path):
+    print('found location to store scraped files')
+else:
+    os.makedirs(save_path)
+
+# Check if the json file is present and try to resume downloading if possible
+scraped_info = list()
+visited_links = list()
+json_path = save_path + 'doom.json'
+if os.path.isfile(json_path):
+    print('Trying to resume download...')
+    with open(json_path, 'r') as jsonfile:
+        scraped_info = json.load(jsonfile)
+        print('Loaded {} records.'.format(len(scraped_info)))
+        if len(scraped_info) != 0:
+            visited_links = [info['url'] for info in scraped_info if 'url' in info]
+
+# print(scraped_info,visited_links)
+
 # Fetching subcategory url in doomworld 
-# sub_links = fetch_subcategories_links(archived_cate,excluded_list)
-# level_links = fetch_level_links(sub_links)
-eg = ['https://www.doomworld.com/idgames/levels/doom/a-c/bak2hell']
-info = fetch_level_info(eg)
+sub_links = fetch_subcategories_links(archived_cate,excluded_list)
+level_links = fetch_level_links(sub_links)
+for level_link in level_links:
+    if level_link in visited_links:
+        continue
+    print('downloading level from ',level_link)
+    status = download_wad(level_link,save_path)
+    if status:
+        info = fetch_level_info(level_link)
+        print('downloading level from ',level_link)
+        scraped_info.append(info)
+        with open(json_path, 'w') as jsonfile:
+            json.dump(scraped_info, jsonfile)
+
+# eg = 'https://www.doomworld.com/idgames/levels/doom/a-c/bak2hell'
+
+# info = fetch_level_info(eg)
+# print(info)
+# download_wad(eg,save_path)
+    
 
 
 
-
-# if os.path.exists(root_path):
-#             print("continuing scrapping")
-#         else:
-#             os.makedirs(root_path)
-
-# # Check if the json file is present and try to resume downloading if possible
-#         json_path = root_path + game_name + '.json'
-#         if os.path.isfile(json_path):
-#             print("Trying to resume download...")
-#             with open(json_path, 'r') as jsonfile:
-#                 self.file_info = json.load(jsonfile)
-#                 print("Loaded {} records.".format(len(self.file_info)))
-
-
-
-
-
-
-# levels_page = open_page(archive_cate)
-# levels_page_links = levels_page.find_all('a')
-# for l in levels_page_links:
-#     # Finding urls that contain this path
-#     if l.has_attr('href') and 'idgames/levels/doom' in l['href']:
-#         cate_path = l['href']
-        
-#         # Skipping excluded categories
-#         if any(x in cate_path for x in excluded_list):
-#             continue
-
-#         cate_id = l['href'].split('/')[-2]
-
-#         cate_url = repo_link + cate_id + "/"
-#         # print(cate_url)
-#         cate_page = open_page(cate_url)
-#         # Fetching links of individual levels in subcategory page
-#         cate_page_links = cate_page.find_all('a')
-#         for c in cate_page_links:
-#             if c.has_attr('href') and c['href'].startswith('levels/doom'):
-#                 map_path = c['href']
-#                 map_id = c['href'].split('/')[-1]
-#                 map_url = cate_url + map_id
-#                 print ('Opening level page: ' + map_url)
-#                 map_page = open_page(map_url)
-#                 # Finds the table containing the WAD download links
-#                 mainDiv = map_page.findAll('table', {'class': 'download'})[0]
-#                 file_page_links = [entry.find_all('a') for entry in mainDiv.find_all('ul', {'class':'square'})][0]
-#                 filename = file_page_links[0]['href'].split('/')[-1]
-#                 # for file in file_page_links:
-#                 #     link = file['href']
-#                 #     if link[0] =='h':
-#                 #         # print(link)
-#                 #         if link[0] =='f':
-#                 #             try:
-#                 #                 # for ftp servers
-#                 #                 urllib.request.urlretrieve(file['href'], save_path + filename)
-#                 #                 break
-#                 #             except Exception as e:
-#                 #                 print(e)
-#                 #         else:
-#                 #             # for http servers
-#                 #             r = session.get(link)
-#                 #             if r.status_code != 200:
-#                 #                 print ('Failed to download the file: ' + link)
-#                 #                 continue
-#                 #             with open(save_path + filename, 'wb') as file:
-#                 #                 file.write(r.content)
-#         #                     break
-#         #         break
-#         # break
