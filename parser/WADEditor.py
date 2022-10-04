@@ -94,6 +94,8 @@ class WAD(dict):
                 lumpinfo = LumpInfo().from_bytes(lump_info_bytes)
                 self['directory'].append(lumpinfo)
 
+            # print(self['directory'])
+
             # Parsing lumps
             for lump in self['directory']:
                 if lump['size'] < 0:

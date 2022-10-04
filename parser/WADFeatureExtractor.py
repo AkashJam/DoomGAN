@@ -35,7 +35,9 @@ class WADFeatureExtractor(object):
         self.special_sector_map = np.zeros(mapsize_px, dtype=np.uint8)
         height_levels = sorted({s['lump']['floor_height'] for s in level_dict['sectors'].values()})
         scale_color = lambda x, levels, a, b: int((levels.index(x)+1)*(b-a)/len(levels))
-        for sector in level_dict['sectors'].values():
+        sectormap = np.zeros(mapsize_px, dtype=np.uint8)
+        # sector_index = 0 # instead use for sector_index, sector in enumerate(level_dict['sectors'].values())
+        for sector_index, sector in enumerate(level_dict['sectors'].values()):
             if len(sector['vertices_xy'])==0:
                 continue  # This sector is not referenced by any linedef so it's not a real sector
 
@@ -44,12 +46,12 @@ class WADFeatureExtractor(object):
             # skimage.draw needs all the coordinates to be > 0. They are centered and rescaled (1 pixel = 32DU)
             x, y = self._rescale_coord(coords_DU[:, 0], coords_DU[:, 1], wad_features)
             px, py = draw.polygon(x, y, shape=tuple(mapsize_px))
-            # print(px,py)
             # 0 is for empty space
             h = sector['lump']['floor_height']
             color = scale_color(h, height_levels, 0, 255)
 
             heightmap[px, py] = color
+            sectormap[px, py] = sector_index
             # TAGMAP GENERATION (intermediate TRIGGERMAP: Sectors referenced by a trigger)
             tag = sector['lump']['tag']
             tag = tag if tag < 63 else 63
@@ -61,6 +63,10 @@ class WADFeatureExtractor(object):
             if len(x) > 2 and len(y) > 2:
                 px, py = draw.polygon_perimeter(x, y, shape=tuple(mapsize_px))
             heightmap[px, py] = color
+            # sectormap[px, py] = sector_index
+        # plt.imshow(sectormap)
+        # plt.show()
+
 
         # WALLMAP and TRIGGERMAP GENERATION
         for line in level_dict['lumps']['LINEDEFS']:
@@ -106,6 +112,8 @@ class WADFeatureExtractor(object):
                 if linedef_type in [10,12,14,16, 255]:
                     # It's a local door or an exit. Simply color the linedefs
                     triggermap[lx, ly] = linedef_type
+        # plt.imshow(triggermap)
+        # plt.show()
         return wallmap, heightmap, triggermap
 
     def draw_thingsmap(self, level_dict, wad_features, mapsize_px):

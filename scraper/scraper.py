@@ -59,7 +59,8 @@ def fetch_level_info(level_url):
     level_info['name'] = info_list[0].contents[0][1:]
     level_info['url'] = level_url
     level_info['rating_value'] = ratings
-    level_info['rating_count'] = int(re.findall(r'\d+', info_list[-1].contents[-1])[0])
+    # print(info_list[-1].content)
+    level_info['rating_count'] = int(re.findall(r'\d+', info_list[-1].contents[-1])[0]) if info_list[-1].content is not None else 0
     return level_info
     # scraped_info.append(level_info)
     # with open(json_path, 'w') as jsonfile:
@@ -91,12 +92,12 @@ def download_wad(level_url, download_path):
                 downloaded = True
                 break
             except Exception as e:
-                print ('Failed to download the file: ' + link)
+                print ('Failed to download the file: ', link)
         else:
             # for http servers
             r = session.get(link)
             if r.status_code != 200:
-                print ('Failed to download the file: ' + link)
+                print ('Failed to download the file: ', link)
                 continue
             with open(file_path + filename, 'wb') as file:
                 file.write(r.content)
@@ -104,8 +105,11 @@ def download_wad(level_url, download_path):
                 break
     if downloaded:
         # Extract ZIP files
-        with zipfile.ZipFile(file_path + filename, 'r') as zip_ref:
+        try:
+            zip_ref = zipfile.ZipFile(file_path + filename, 'r')
             zip_ref.extractall(file_path)
+        except Exception as e:
+            print ('Failed to extract the file', filename)
     return downloaded
 
     # Need to return true if downloaded else false to see if the info needs to be saved into the doom json file
@@ -145,21 +149,26 @@ sub_links = fetch_subcategories_links(archived_cate,excluded_list)
 level_links = fetch_level_links(sub_links)
 for level_link in level_links:
     if level_link in visited_links:
+        print('skipping ',level_link)
         continue
     print('downloading level from ',level_link)
     status = download_wad(level_link,save_path)
     if status:
         info = fetch_level_info(level_link)
-        print('downloading level from ',level_link)
+        print('downloading level info from ',level_link)
         scraped_info.append(info)
         with open(json_path, 'w') as jsonfile:
             json.dump(scraped_info, jsonfile)
 
-# eg = 'https://www.doomworld.com/idgames/levels/doom/a-c/bak2hell'
+# with zipfile.ZipFile('../dataset/scraped/doom/crescent/' + 'crescent.zip', 'r') as zip_ref:
+#             zip_ref.extractall('../dataset/scraped/doom/crescent/')
+
+# eg = 'https://www.doomworld.com/idgames/levels/doom/a-c/alleve'
 
 # info = fetch_level_info(eg)
 # print(info)
 # download_wad(eg,save_path)
+# https://www.doomworld.com/idgames/levels/doom/a-c/acastle2
     
 
 
