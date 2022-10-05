@@ -104,6 +104,8 @@ class WAD(dict):
                     # We try to go on extracting as much data as we can from the WAD file.
                     continue
                 lumpname = lump['name']
+                # if lumpname=='TEXTURE1' or lumpname=='TEXTURE2':
+                #     print(lump.keys(), 'Here is Textures1&2')
                 # If the lump is a level descriptor, then create a new secondary key for the level
                 if (self.map_regex.match(lump['name']) is not None) or (self.em_regex.match(lump['name']) is not None):
                     self.levels.append({'name':lumpname, 'lumps':{}})

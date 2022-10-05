@@ -3,7 +3,7 @@ from matplotlib import pyplot as plt
 
 reader = WADReader()
 
-wad_with_features = reader.extract("../dataset/scraped/doom/01fava/FAVA.WAD")
+wad_with_features = reader.extract("../dataset/scraped/doom/crusades/CRUSADES.WAD")
 wad = wad_with_features["wad"]
 levels = wad_with_features["levels"]
 features = levels[0]["features"]
@@ -11,9 +11,9 @@ maps = levels[0]["maps"]
 
 # print(wad.keys())
 
-for level in wad_with_features['wad'].levels:
+# for level in wad_with_features['wad'].levels:
 #     print(level['lumps']['BLOCKMAP'])
-    print(set(sector['floor_flat'] for sector in level['lumps']['SECTORS']))
+    # print(set(sector['floor_flat'] for sector in level['lumps']['SECTORS']))
 #     # txrmap = np.zeros(mapsize_px, dtype=np.uint8)
 #     list_of_sectors = list()
 #     sectors = list(set(sidedef['sector'] for sidedef in level['lumps']['SIDEDEFS']))
