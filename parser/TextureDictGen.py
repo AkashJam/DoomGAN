@@ -55,8 +55,9 @@ for id in scraped_ids:
 
 unique_textures.sort(key=lambda v: v.upper())
 unique_flats.sort(key=lambda v: v.upper())
-texture_dict = {texture: i for i,texture in enumerate(unique_textures)}
-flat_dict = {flat: i for i,flat in enumerate(unique_flats)}
+
+texture_dict = {texture: i+1 for i,texture in enumerate(unique_textures)}
+flat_dict = {flat: i+1 for i,flat in enumerate(unique_flats)}
 textdict = {'textures': texture_dict, 'flats': flat_dict}
 
 # # print(textdict)

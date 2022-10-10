@@ -1,4 +1,5 @@
 import numpy as np
+import json, os
 from skimage import io
 from skimage.measure import regionprops
 import skimage.draw as draw
@@ -10,11 +11,12 @@ import Dictionaries.ThingTypes as ThingTypes
 import Dictionaries.LinedefTypes as LinedefTypes
 from RoomTopology import topological_features
 
+
 class WADFeatureExtractor(object):
     """
     Class for extracting a set of feature from a given WAD level or a set of Feature Maps
     """
-       
+
 
 
     def _rescale_coord(self, x_du, y_du, wad_features, factor=32):
@@ -35,9 +37,21 @@ class WADFeatureExtractor(object):
         self.special_sector_map = np.zeros(mapsize_px, dtype=np.uint8)
         height_levels = sorted({s['lump']['floor_height'] for s in level_dict['sectors'].values()})
         scale_color = lambda x, levels, a, b: int((levels.index(x)+1)*(b-a)/len(levels))
-        sectormap = np.zeros(mapsize_px, dtype=np.uint8)
-        # sector_index = 0 # instead use for sector_index, sector in enumerate(level_dict['sectors'].values())
-        for sector_index, sector in enumerate(level_dict['sectors'].values()):
+        # sectormap = np.zeros(mapsize_px, dtype=np.uint8)
+        ceilingtexturemap = np.zeros(mapsize_px, dtype=np.uint8)
+        floortexturemap = np.zeros(mapsize_px, dtype=np.uint8)
+
+        # If walls are not only simple
+        # walltextmapsize_px = np.insert(mapsize_px,len(mapsize_px),3)
+        leftwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
+        rightwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
+
+        save_path = './Dictionaries/TextureTypes.json'
+        if os.path.isfile(save_path):
+            with open(save_path, 'r') as jsonfile:
+                texture_info = json.load(jsonfile)
+
+        for i,sector in enumerate(level_dict['sectors'].values()):
             if len(sector['vertices_xy'])==0:
                 continue  # This sector is not referenced by any linedef so it's not a real sector
 
@@ -51,7 +65,9 @@ class WADFeatureExtractor(object):
             color = scale_color(h, height_levels, 0, 255)
 
             heightmap[px, py] = color
-            sectormap[px, py] = sector_index
+            # sectormap[px, py] = i
+            floortexturemap[px, py] = texture_info['flats'][sector['lump']['floor_flat']]
+            ceilingtexturemap[px, py] = texture_info['flats'][sector['lump']['ceiling_flat']]
             # TAGMAP GENERATION (intermediate TRIGGERMAP: Sectors referenced by a trigger)
             tag = sector['lump']['tag']
             tag = tag if tag < 63 else 63
@@ -63,8 +79,8 @@ class WADFeatureExtractor(object):
             if len(x) > 2 and len(y) > 2:
                 px, py = draw.polygon_perimeter(x, y, shape=tuple(mapsize_px))
             heightmap[px, py] = color
-            # sectormap[px, py] = sector_index
-        # plt.imshow(sectormap)
+            # sectormap[px, py] = i
+        # plt.imshow(floortexturemap)
         # plt.show()
 
 
@@ -77,7 +93,15 @@ class WADFeatureExtractor(object):
             lx, ly = draw.line(sx, sy, ex, ey)
             if line['left_sidedef'] == -1: # If no sector on the other side
                 # It's a wall
+                leftwalltexturemap[lx,ly] = 0
                 wallmap[lx, ly] = 255
+            else:
+                # leftwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['upper_texture']]
+                leftwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['middle_texture']]
+            #     leftwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['lower_texture']]
+            # rightwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['upper_texture']]
+            rightwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['middle_texture']]
+            # rightwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['lower_texture']]
             linedef_type = LinedefTypes.get_index_from_type(line['types'])
             trigger = line['trigger']
             # clamping the trigger tag to [1,64] (otherwise the encoding will overflow)
@@ -112,9 +136,9 @@ class WADFeatureExtractor(object):
                 if linedef_type in [10,12,14,16, 255]:
                     # It's a local door or an exit. Simply color the linedefs
                     triggermap[lx, ly] = linedef_type
-        # plt.imshow(triggermap)
+        # plt.imshow(leftwalltexturemap)
         # plt.show()
-        return wallmap, heightmap, triggermap
+        return wallmap, heightmap, triggermap, floortexturemap, ceilingtexturemap, rightwalltexturemap, leftwalltexturemap
 
     def draw_thingsmap(self, level_dict, wad_features, mapsize_px):
         thingsmap = np.zeros(mapsize_px, dtype=np.uint8)
@@ -160,9 +184,9 @@ class WADFeatureExtractor(object):
                "+" : ["door","walkable","activatable"],
                ">" : ["exit","activatable"]
 
-               :param json_db: 
-               :param output_path: 
-               :return: 
+               :param json_db:
+               :param output_path:
+               :return:
                """
 
         X_map = np.ndarray(shape=maps['floormap'].shape, dtype=np.uint8)
@@ -224,10 +248,10 @@ class WADFeatureExtractor(object):
         txtmap[:, 1::2] = Y_map
         return txtmap.tolist()
 
-            
+
     def compute_maps(self, level_dict, wad_features):
         maps=dict()
-        
+
         mapsize_du = np.array([wad_features['width'], wad_features['height']])
         # print("du shape",mapsize_du,wad_features['width'],wad_features['height'])
         mapsize_px = np.ceil(mapsize_du / 32).astype(np.int32)
@@ -235,7 +259,7 @@ class WADFeatureExtractor(object):
 
         # computing these maps require the knowledge of the level width and height
         #tag_map is an intermediate map needed to build the trigger map
-        maps['wallmap'], maps['heightmap'], maps['triggermap'] = self.draw_sector_maps(level_dict, mapsize_px, wad_features)
+        maps['wallmap'], maps['heightmap'], maps['triggermap'], maps['floortexturemap'], maps['ceilingtexturemap'], maps['rightwalltexturemap'], maps['leftwalltexturemap'] = self.draw_sector_maps(level_dict, mapsize_px, wad_features)
         maps['thingsmap'] = self.draw_thingsmap(level_dict, wad_features, mapsize_px)
         enumerated_floors, wad_features['floors'] = label(maps['heightmap']>0, connectivity=2, return_num=True)
         maps['floormap'] = enumerated_floors.astype(np.uint8)
@@ -281,9 +305,9 @@ class WADFeatureExtractor(object):
     def extract_features_from_wad(self, level_dict):
         """
         :param level_dict: Wad in dictionary format as produced by WADReader.read()
-        :return: 
+        :return:
         """
-        
+
         level_dict['features'] = dict()
         level_dict['maps'] = dict()
         # Computing the simplest set of features
@@ -399,7 +423,7 @@ class WADFeatureExtractor(object):
     def image_features(self, floormap, wallmap, thingsmap):
         """ Returns a dict containing the set of features that are based on the floormap and wallmaps of the level """
         feature_dict = dict()
-        
+
         # Creating auxiliary feature maps
         nonempty_map = floormap.astype(np.bool).astype(np.uint8)
         walkablemap = np.logical_and(nonempty_map, np.logical_not(wallmap)).astype(np.uint8)

@@ -1,5 +1,7 @@
 from WADEditor import WADReader
 from matplotlib import pyplot as plt
+import tensorflow as tf
+import os
 
 reader = WADReader()
 
@@ -9,29 +11,53 @@ levels = wad_with_features["levels"]
 features = levels[0]["features"]
 maps = levels[0]["maps"]
 
-# print(wad.keys())
+keypref = ['thingsmap', 'heightmap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 'leftwalltexturemap']
 
-# for level in wad_with_features['wad'].levels:
-#     print(level['lumps']['BLOCKMAP'])
-    # print(set(sector['floor_flat'] for sector in level['lumps']['SECTORS']))
-#     # txrmap = np.zeros(mapsize_px, dtype=np.uint8)
-#     list_of_sectors = list()
-#     sectors = list(set(sidedef['sector'] for sidedef in level['lumps']['SIDEDEFS']))
-#     for s in sectors:
-#         sidedef_index = 0
-#         list_of_sidedef = []
-#         list_of_linedef = []
-#         for sidedef in level['lumps']['SIDEDEFS']:
-#             if sidedef['sector']==s:
-#                 list_of_sidedef.append(sidedef_index)
-#                 linedef_index = 0
-#                 for linedef in level['lumps']['LINEDEFS']:
-#                     if linedef['right_sidedef']==sidedef_index or linedef['left_sidedef']==sidedef_index:
-#                         list_of_linedef.append(linedef_index)
-#                     linedef_index += 1
-#             sidedef_index += 1    
-#         list_of_sectors.append({'SIDEDEFS': list_of_sidedef, 'LINEDEFS': list_of_linedef})
-#         print("Sector", s, list_of_sectors[s])
-# plt.imshow(maps["roommap"])
-# plt.show()
+def _bytes_feature(value):
+    """Returns a bytes_list from a string / byte."""
+    if isinstance(value, type(tf.constant(0))): # if value ist tensor
+        value = value.numpy() # get value of tensor
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
+
+def serialize_array(array):
+  array = tf.io.serialize_tensor(array)
+  return array
+
+
+# Write TFrecord file
+save_path = '../dataset/parsed/doom/'
+file_name = 'data.tfrecords'
+file_path = save_path + file_name
+if os.path.exists(save_path):
+  if os.path.isfile(file_path):
+    print('found location of parsed files')
+else:
+    os.makedirs(save_path)
+serialized_array = dict()
+with tf.io.TFRecordWriter(file_path) as writer:
+  for key in keypref:
+    serialized_array[key] = serialize_array(maps[key])
+  feature = {key: _bytes_feature(serialized_array[key]) for key in keypref}
+  example_message = tf.train.Example(features=tf.train.Features(feature=feature))
+  writer.write(example_message.SerializeToString())
+
+# Read TFRecord file
+def _parse_tfr_element(element):
+  parse_dic = {
+    key: tf.io.FixedLenFeature([], tf.string) for key in keypref # Note that it is tf.string, not tf.float32
+    }
+  example_message = tf.io.parse_single_example(element, parse_dic)
+  features = dict()
+  for key in keypref:
+    b_feature = example_message[key] # get byte string
+    feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
+    features[key] = feature
+  return features
+
+
+tfr_dataset = tf.data.TFRecordDataset(file_path)
+dataset = tfr_dataset.map(_parse_tfr_element)
+print(dataset)
+for instance in dataset:
+  print(instance)
