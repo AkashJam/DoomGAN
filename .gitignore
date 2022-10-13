@@ -1,5 +1,7 @@
 # Dataset
 dataset/
+generated_maps/
+training_checkpoints/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

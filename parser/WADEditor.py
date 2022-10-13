@@ -318,16 +318,18 @@ class WADReader(object):
             if error['fatal']:
                 return None
         parsed_wad['levels'] = list()
-        # print(parsed_wad.keys)
-        for level in parsed_wad['wad'].levels:
-            # print(parsed_wad['wad'].levels[0])
-            try:
-                extractor = WADFeatureExtractor()
-                features, maps, txt, graph = extractor.extract_features_from_wad(level)
-                # print(maps)
-                parsed_wad['levels'] += [{'name': level['name'], 'features': features, 'maps':maps, 'text':txt, 'graph':graph}]
-            except:
-                warnings.warn("Failed to extract data for level {}".format(level['name']))
-        if save_to is not None:
-            self.save_sample(parsed_wad, save_to, root_path, update_record)
-        return parsed_wad
+        if len(parsed_wad['wad'].levels) == 1:
+            for level in parsed_wad['wad'].levels:
+                # print(parsed_wad['wad'].levels[0])
+                try:
+                    extractor = WADFeatureExtractor()
+                    features, maps, txt, graph = extractor.extract_features_from_wad(level)
+                    # print(maps)
+                    parsed_wad['levels'] += [{'name': level['name'], 'features': features, 'maps':maps, 'text':txt, 'graph':graph}]
+                except:
+                    warnings.warn("Failed to extract data for level {}".format(level['name']))
+            if save_to is not None:
+                self.save_sample(parsed_wad, save_to, root_path, update_record)
+            return parsed_wad
+        else:
+            return None
