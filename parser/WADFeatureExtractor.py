@@ -46,7 +46,7 @@ class WADFeatureExtractor(object):
         leftwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
         rightwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
 
-        save_path = './Dictionaries/TextureTypes.json'
+        save_path = '../dataset/parsed/doom/graphics.json'
         if os.path.isfile(save_path):
             with open(save_path, 'r') as jsonfile:
                 texture_info = json.load(jsonfile)

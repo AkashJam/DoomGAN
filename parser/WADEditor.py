@@ -66,6 +66,7 @@ class WAD(dict):
         self.map_regex = re.compile('MAP\d\d?')
         self.em_regex = re.compile('E\d*M\d\d?')
         self.errors = list()
+        self['exception'] = 0
 
         self.mode = mode
         self.current_lump_offset = 12  # Keeps track of the offset in bytes of the last. The header is always 12 bytes long
@@ -94,7 +95,6 @@ class WAD(dict):
                 lumpinfo = LumpInfo().from_bytes(lump_info_bytes)
                 self['directory'].append(lumpinfo)
 
-            # print(self['directory'])
 
             # Parsing lumps
             for lump in self['directory']:
@@ -104,8 +104,14 @@ class WAD(dict):
                     # We try to go on extracting as much data as we can from the WAD file.
                     continue
                 lumpname = lump['name']
-                # if lumpname=='TEXTURE1' or lumpname=='TEXTURE2':
+                if lumpname in ['F_START','TEXTURE1','TEXTURE2']:
+                    self['exception'] = 1 # Ignoring WADs with custom flats and textures
                 #     print(lump.keys(), 'Here is Textures1&2')
+                # Levels without Flats section: 1934 out of 1969
+                # Levels without Wall textures patches: 1854 out of 1969
+                # Levels without either: 1838 out of 1948
+                # Single Floor Levels without either: 1538 out of 1969
+                # Total unique graphics of sfl: 506 textures and 182 flats in 1538 levels
                 # If the lump is a level descriptor, then create a new secondary key for the level
                 if (self.map_regex.match(lump['name']) is not None) or (self.em_regex.match(lump['name']) is not None):
                     self.levels.append({'name':lumpname, 'lumps':{}})
@@ -318,7 +324,7 @@ class WADReader(object):
             if error['fatal']:
                 return None
         parsed_wad['levels'] = list()
-        if len(parsed_wad['wad'].levels) == 1:
+        if len(parsed_wad['wad'].levels) == 1: # Consider only single level 
             for level in parsed_wad['wad'].levels:
                 # print(parsed_wad['wad'].levels[0])
                 try:
