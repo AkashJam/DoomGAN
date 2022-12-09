@@ -49,7 +49,10 @@ def parse_wads(wad_ids, dataset_path):
 def metadata_gen(wad_list,keys,save_path):
   
   map_meta = { "thingsmap": {"type": "uint8", "min": 0.0, "max": 119.0}, 
+  "floormap": {"type": "uint8", "min": 0.0, "max": 255.0},
+  "wallmap": {"type": "uint8", "min": 0.0, "max": 255.0},
   "heightmap": {"type": "uint8", "min": 0.0, "max": 255.0}, 
+  "roommap": {"type": "uint8", "min": 0.0, "max": 8.0},
   "floortexturemap": {"type": "uint8", "min": 0.0, "max": 182.0}, 
   "ceilingtexturemap": {"type": "uint8", "min": 0.0, "max": 182.0}, 
   "rightwalltexturemap": {"type": "uint8", "min": 0.0, "max": 506.0}, 
@@ -105,5 +108,5 @@ def doom_parser(wads_path,save_path,keys):
 
 dataset_path = '../dataset/scraped/doom/'
 save_path = '../dataset/parsed/doom/'
-keys = ['thingsmap', 'heightmap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 'leftwalltexturemap']
+keys = ['thingsmap', 'floormap', 'wallmap', 'heightmap', 'roommap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 'leftwalltexturemap']
 doom_parser(dataset_path,save_path,keys)

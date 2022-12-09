@@ -164,7 +164,7 @@ def create_graph(floormap, return_dist=False, room_coordinates=False):
                         i_neighbour = room_RAG_boundaries.node[neigh]['walls'].index(rev_cs)
                         room_RAG_boundaries.node[room_id]['walls'][i_current] = (cs[0], neigh)
                         room_RAG_boundaries.node[neigh]['walls'][i_neighbour] = (rev_cs[0], room_id)
-
+    roommap = np.uint8(roommap)
     if return_dist:
         return roommap, room_RAG_boundaries, dist
     return roommap, room_RAG_boundaries
