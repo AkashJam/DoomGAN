@@ -105,14 +105,7 @@ class WAD(dict):
                     continue
                 lumpname = lump['name']
                 if lumpname in ['F_START','TEXTURE1','TEXTURE2']:
-                    self['exception'] = 1 # Ignoring WADs with custom flats and textures
-                #     print(lump.keys(), 'Here is Textures1&2')
-                # Levels without Flats section: 1934 out of 1969
-                # Levels without Wall textures patches: 1854 out of 1969
-                # Levels without either: 1838 out of 1948
-                # Single Floor Levels without either: 1538 out of 1969
-                # Total unique graphics of sfl: 506 textures and 182 flats in 1538 levels
-                # If the lump is a level descriptor, then create a new secondary key for the level
+                    self['exception'] = 1 # Ignoring WADs with custom flats and textures, i.e 1538 single floor levels out of 1969
                 if (self.map_regex.match(lump['name']) is not None) or (self.em_regex.match(lump['name']) is not None):
                     self.levels.append({'name':lumpname, 'lumps':{}})
 

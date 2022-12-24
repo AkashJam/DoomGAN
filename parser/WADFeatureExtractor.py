@@ -19,7 +19,7 @@ class WADFeatureExtractor(object):
 
 
 
-    def _rescale_coord(self, x_du, y_du, wad_features, factor=32):
+    def _rescale_coord(self, x_du, y_du, wad_features, factor=16):
         x_centered = x_du - wad_features['x_min']
         y_centered = y_du - wad_features['y_min']
         x = np.floor(x_centered / factor).astype(np.int32)
@@ -41,10 +41,9 @@ class WADFeatureExtractor(object):
         ceilingtexturemap = np.zeros(mapsize_px, dtype=np.uint8)
         floortexturemap = np.zeros(mapsize_px, dtype=np.uint8)
 
-        # If walls are not only simple
-        # walltextmapsize_px = np.insert(mapsize_px,len(mapsize_px),3)
         leftwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
         rightwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
+        # walltextmapsize_px = np.insert(mapsize_px,len(mapsize_px),3) # If walls are not only simple
 
         save_path = '../dataset/parsed/doom/graphics.json'
         if os.path.isfile(save_path):
@@ -80,8 +79,6 @@ class WADFeatureExtractor(object):
                 px, py = draw.polygon_perimeter(x, y, shape=tuple(mapsize_px))
             heightmap[px, py] = color
             # sectormap[px, py] = i
-        # plt.imshow(floortexturemap)
-        # plt.show()
 
 
         # WALLMAP and TRIGGERMAP GENERATION
@@ -91,16 +88,17 @@ class WADFeatureExtractor(object):
             sx, sy = self._rescale_coord(start[0], start[1],wad_features)
             ex, ey = self._rescale_coord(end[0], end[1], wad_features)
             lx, ly = draw.line(sx, sy, ex, ey)
+            rightwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['middle_texture']]
             if line['left_sidedef'] == -1: # If no sector on the other side
                 # It's a wall
-                leftwalltexturemap[lx,ly] = 0
                 wallmap[lx, ly] = 255
+                leftwalltexturemap[lx,ly] = 0
             else:
-                # leftwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['upper_texture']]
                 leftwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['middle_texture']]
-            #     leftwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['lower_texture']]
+                # to be added if taking into account the upper and lower wall textures in non simple structures
+                # leftwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['upper_texture']]
+                # leftwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['lower_texture']]
             # rightwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['upper_texture']]
-            rightwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['middle_texture']]
             # rightwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['lower_texture']]
             linedef_type = LinedefTypes.get_index_from_type(line['types'])
             trigger = line['trigger']
@@ -136,12 +134,14 @@ class WADFeatureExtractor(object):
                 if linedef_type in [10,12,14,16, 255]:
                     # It's a local door or an exit. Simply color the linedefs
                     triggermap[lx, ly] = linedef_type
-        # plt.imshow(leftwalltexturemap)
-        # plt.show()
         return wallmap, heightmap, triggermap, floortexturemap, ceilingtexturemap, rightwalltexturemap, leftwalltexturemap
 
     def draw_thingsmap(self, level_dict, wad_features, mapsize_px):
-        thingsmap = np.zeros(mapsize_px, dtype=np.uint8)
+        # thingsmap = np.zeros(mapsize_px, dtype=np.uint8)
+        cate = ThingTypes.get_all_categories()
+        thingsmap = dict()
+        for cat in cate:
+            thingsmap[cat] = np.zeros(mapsize_px, dtype=np.uint8)
         things = level_dict['lumps']['THINGS']
         for thing in things:
             category = ThingTypes.get_category_from_type_id(thing['type'])
@@ -151,10 +151,9 @@ class WADFeatureExtractor(object):
             if is_unknown or out_of_bounds:
                 continue
             tx, ty = self._rescale_coord(thing['x'], thing['y'], wad_features)
-            if thingsmap[tx, ty] in ThingTypes.get_index_by_category('start'):
-                # Avoid overwriting of player start location if something else is placed there (like a teleporter)
-                continue
-            thingsmap[tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
+            
+            if category in cate:
+                thingsmap[category][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
         return thingsmap
 
     def draw_textmap(self, maps):
@@ -198,15 +197,15 @@ class WADFeatureExtractor(object):
         walls = maps['wallmap'] != 0
         floor = maps['floormap'] != 0
         change_in_height = roberts(maps['heightmap']) != 0
-        enemies = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('monsters'))
-        weapons = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('weapons'))
-        ammo = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('ammunitions'))
-        health = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('powerups'))
-        barrels = np.isin(maps['thingsmap'], [ThingTypes.get_index_from_type_id(t) for t in [2035, 70]])
-        keys = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('keys'))
-        start = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('start'))
-        teleport_dst = np.isin(maps['thingsmap'], [ThingTypes.get_index_from_type_id(14)])
-        decorative = np.isin(maps['thingsmap'], ThingTypes.get_index_by_category('decorations'))
+        enemies = np.isin(maps['thingsmap']['monsters'], ThingTypes.get_index_by_category('monsters'))
+        weapons = np.isin(maps['thingsmap']['weapons'], ThingTypes.get_index_by_category('weapons'))
+        ammo = np.isin(maps['thingsmap']['ammunitions'], ThingTypes.get_index_by_category('ammunitions'))
+        health = np.isin(maps['thingsmap']['powerups'], ThingTypes.get_index_by_category('powerups'))
+        barrels = np.isin(maps['thingsmap']['obstacles'], [ThingTypes.get_index_from_type_id(t) for t in [2035, 70]])
+        keys = np.isin(maps['thingsmap']['keys'], ThingTypes.get_index_by_category('keys'))
+        start = np.isin(maps['thingsmap']['start'], ThingTypes.get_index_by_category('start'))
+        teleport_dst = np.isin(maps['thingsmap']['other'], [ThingTypes.get_index_from_type_id(14)])
+        decorative = np.isin(maps['thingsmap']['decorations'], ThingTypes.get_index_by_category('decorations'))
         door_locked = np.isin(maps['triggermap'],
                               [LinedefTypes.get_index_from_type(l) for l in [26, 28, 27, 32, 33, 34]])
         door_open = np.isin(maps['triggermap'],
@@ -253,9 +252,8 @@ class WADFeatureExtractor(object):
         maps=dict()
 
         mapsize_du = np.array([wad_features['width'], wad_features['height']])
-        # print("du shape",mapsize_du,wad_features['width'],wad_features['height'])
-        mapsize_px = np.ceil(mapsize_du / 32).astype(np.int32)
-        # print("px shape",mapsize_px)
+        # rescaling maps to 1 pixel for 16 DOOM units
+        mapsize_px = np.ceil(mapsize_du / 16).astype(np.int32)
 
         # computing these maps require the knowledge of the level width and height
         #tag_map is an intermediate map needed to build the trigger map
@@ -453,22 +451,22 @@ class WADFeatureExtractor(object):
         feature_dict["level_centroid_y"] = features[0]['centroid'][1]
 
 
-        feature_dict['number_of_artifacts'] = int(np.size(self._find_thing_category('artifacts', thingsmap), axis=-1))
-        feature_dict['number_of_powerups'] = int(np.size(self._find_thing_category('powerups', thingsmap), axis=-1))
-        feature_dict['number_of_weapons'] = int(np.size(self._find_thing_category('weapons', thingsmap), axis=-1))
+        feature_dict['number_of_artifacts'] = int(np.size(self._find_thing_category('artifacts', thingsmap['artifacts']), axis=-1))
+        feature_dict['number_of_powerups'] = int(np.size(self._find_thing_category('powerups', thingsmap['powerups']), axis=-1))
+        feature_dict['number_of_weapons'] = int(np.size(self._find_thing_category('weapons', thingsmap['weapons']), axis=-1))
         feature_dict['number_of_ammunitions'] = int(
-            np.size(self._find_thing_category('ammunitions', thingsmap), axis=-1))
-        feature_dict['number_of_keys'] = int(np.size(self._find_thing_category('keys', thingsmap), axis=-1))
-        feature_dict['number_of_monsters'] = int(np.size(self._find_thing_category('monsters', thingsmap), axis=-1))
-        feature_dict['number_of_obstacles'] = int(np.size(self._find_thing_category('obstacles', thingsmap), axis=-1))
+            np.size(self._find_thing_category('ammunitions', thingsmap['ammunitions']), axis=-1))
+        feature_dict['number_of_keys'] = int(np.size(self._find_thing_category('keys', thingsmap['keys']), axis=-1))
+        feature_dict['number_of_monsters'] = int(np.size(self._find_thing_category('monsters', thingsmap['monsters']), axis=-1))
+        feature_dict['number_of_obstacles'] = int(np.size(self._find_thing_category('obstacles', thingsmap['obstacles']), axis=-1))
         feature_dict['number_of_decorations'] = int(
-            np.size(self._find_thing_category('decorations', thingsmap), axis=-1))
+            np.size(self._find_thing_category('decorations', thingsmap['decorations']), axis=-1))
 
         feature_dict['walkable_area'] = feature_walkablemap[0]['area']
         feature_dict['walkable_percentage'] = float(
             feature_walkablemap[0]['area'] / feature_dict['level_area'])
 
-        start_location = self._find_thing_category('start', thingsmap)
+        start_location = self._find_thing_category('start', thingsmap['start'])
         if not len(start_location[0]) or not len(start_location[1]):
             start_x, start_y = -1, -1
         else:

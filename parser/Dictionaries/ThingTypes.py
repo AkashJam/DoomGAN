@@ -106,7 +106,7 @@ things['obstacles'] = [
     {'int':37, 	    'hex':'25',  	'version':'R', 	'radius':16,  	'sprite':'COL6', 	'sequence':'A', 	'class':'O',    	'description':'Short red pillar with skull'},
     {'int':86, 	    'hex':'56',  	'version':'2', 	'radius':16,  	'sprite':'TLP2', 	'sequence':'ABCD', 	'class':'O',    	'description':'Short techno floor lamp'},
     {'int':27, 	    'hex':'1B',  	'version':'R', 	'radius':16,  	'sprite':'POL4', 	'sequence':'A', 	'class':'O',    	'description':'Skull on a pole'},
-    {'int':47, 	    'hex':'2F',  	'version':'R', 	'radius':16,  	'sprite':'SMIT', 	'sequence':'A', 	'class':'O',   	'description':'Stalagmite'},
+    {'int':47, 	    'hex':'2F',  	'version':'R', 	'radius':16,  	'sprite':'SMIT', 	'sequence':'A', 	'class':'O',   	    'description':'Stalagmite'},
     {'int':44, 	    'hex':'2C',  	'version':'R', 	'radius':16,  	'sprite':'TBLU', 	'sequence':'ABCD', 	'class':'O',    	'description':'Tall blue firestick'},
     {'int':45, 	    'hex':'2D',  	'version':'R', 	'radius':16,  	'sprite':'TGRN', 	'sequence':'ABCD', 	'class':'O',    	'description':'Tall green firestick'},
     {'int':30, 	    'hex':'1E',  	'version':'R', 	'radius':16,  	'sprite':'COL1', 	'sequence':'A', 	'class':'O',    	'description':'Tall green pillar'},
@@ -152,10 +152,14 @@ things['other'] = [
 ]
 
 all_things = list() # Contains the list of "thing" descriptors, ordered by category
+categories = ['other', 'keys', 'decorations', 'obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 
-for category in ['other', 'keys', 'decorations', 'obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']:
+for category in categories:
     all_things += things[category]
 all_types= [i['int'] for i in all_things] # Contains the list of Thing types id used by doom (in the same order of 'all_things')
+
+def get_all_categories():
+    return categories+['start']
 
 def get_category_from_type_id(type_id):
     """

@@ -96,11 +96,10 @@ def create_graph(floormap, return_dist=False, room_coordinates=False):
     
     # Find edges in an image
     edges = filters.sobel(roommap)
-    # roommapRGB = color.gray2rgb(edges)
     room_RAG_boundaries = skg.rag_boundary(roommap, edges)
-    # print(roommap.shape)
 
     # View graph
+    # roommapRGB = color.gray2rgb(edges)
     # lc = skg.show_rag(roommap, room_RAG_boundaries, roommapRGB, img_cmap=None, edge_cmap='viridis', edge_width=1.2)
     # plt.colorbar(lc, fraction=0.03)
     # io.show()
@@ -164,7 +163,6 @@ def create_graph(floormap, return_dist=False, room_coordinates=False):
                         i_neighbour = room_RAG_boundaries.node[neigh]['walls'].index(rev_cs)
                         room_RAG_boundaries.node[room_id]['walls'][i_current] = (cs[0], neigh)
                         room_RAG_boundaries.node[neigh]['walls'][i_neighbour] = (rev_cs[0], room_id)
-    roommap = np.uint8(roommap)
     if return_dist:
         return roommap, room_RAG_boundaries, dist
     return roommap, room_RAG_boundaries
@@ -261,7 +259,7 @@ def topological_features(floormap, prepare_for_doom=False):
     metrics["distmap-Q1".format(met)] = np.percentile(values, 25)
     metrics["distmap-Q2".format(met)] = np.percentile(values, 50)
     metrics["distmap-Q3".format(met)] = np.percentile(values, 75)
-
+    # roommap = int(roommap) # converting to int to make it JSON serializeable
     return roommap, room_graph, metrics
 
 def quality_metrics(sample, maps):

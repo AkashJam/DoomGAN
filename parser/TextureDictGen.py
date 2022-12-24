@@ -59,7 +59,7 @@ for id in scraped_ids:
 
 unique_textures.sort(key=lambda v: v.upper())
 unique_flats.sort(key=lambda v: v.upper())
-graphic_meta = {'textures':len(unique_flats),'flats':len(unique_textures)}
+graphic_meta = {'textures':len(unique_textures),'flats':len(unique_flats)}
 
 texture_dict = {texture: i+1 for i,texture in enumerate(unique_textures)}
 flat_dict = {flat: i+1 for i,flat in enumerate(unique_flats)}

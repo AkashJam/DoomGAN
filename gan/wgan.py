@@ -9,48 +9,55 @@ from ganmeta import read_record, scaling_maps, generate_and_save_images, generat
 
 # Build the network
 def make_generator_model(b_size=32,z_dim=100):
+    # try to convert it for 256^2, which will start from 16*16*512 till 256*256*4 = 131,072 + 65,536 + 131,072 + 262,144 + 65,536 = 655,360 params
     model = tf.keras.Sequential()
     model.add(layers.InputLayer((z_dim,), batch_size=b_size))
-    model.add(layers.Dense(8*8*1024, use_bias=False, input_shape=(z_dim,))) # try to convert it for 256^2, which will start from 16*16*512 till 256*256*3
+    model.add(layers.Dense(16*16*512, use_bias=False, input_shape=(z_dim,))) 
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
     
-    model.add(layers.Reshape((8, 8, 1024))) #Check if you can reduce the dense layer and rechape it
+    model.add(layers.Reshape((16, 16, 512))) #Check if you can reduce the dense layer and rechape it
 
-    model.add(layers.Conv2DTranspose(512, (4, 4), strides=(2, 2), padding='same', use_bias=False))
-    assert model.output_shape == (b_size, 16, 16, 512)  # Note: None is the batch size
+    model.add(layers.Conv2DTranspose(256, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
+    assert model.output_shape == (b_size, 32, 32, 256)  # Note: None is the batch size
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
-    model.add(layers.Conv2DTranspose(256, (4, 4), strides=(2, 2), padding='same', use_bias=False))
-    assert model.output_shape == (b_size, 32, 32, 256)
-    model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Conv2DTranspose(128, (4, 4), strides=(2, 2), padding='same', use_bias=False))
+    model.add(layers.Conv2DTranspose(128, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
     assert model.output_shape == (b_size, 64, 64, 128)
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
-    model.add(layers.Conv2DTranspose(6, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='tanh'))
-    assert model.output_shape == (b_size, 128, 128, 6)
+    model.add(layers.Conv2DTranspose(64, (4, 4), strides=(2, 2), padding='same', use_bias=False))
+    assert model.output_shape == (b_size, 128, 128, 64)
+    model.add(layers.BatchNormalization())
+    model.add(layers.LeakyReLU())
 
+    model.add(layers.Conv2DTranspose(4, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='tanh')) 
+    assert model.output_shape == (b_size, 256, 256, 4)
     return model
 
 
 def make_discriminator_model(b_size=32):
+    # from 256*256*4 to 1 = 2,097,152 + 
     model = tf.keras.Sequential()
-    model.add(layers.InputLayer((128, 128, 6), batch_size=b_size))
-    model.add(layers.Conv2D(128, (4, 4), strides=(2, 2), padding='same',
-                                     input_shape=[128, 128, 6]))
+    model.add(layers.InputLayer((256, 256, 4), batch_size=b_size))
+    model.add(layers.Conv2D(32, (4, 4), strides=(2, 2), padding='same',
+                                     input_shape=[256, 256, 4]))
+    model.add(layers.LeakyReLU())
+    model.add(layers.Dropout(0.3))
+
+    model.add(layers.Conv2D(64, (4, 4), strides=(2, 2), padding='same'))
+    model.add(layers.LayerNormalization())
+    model.add(layers.LeakyReLU())
+    model.add(layers.Dropout(0.3))
+
+    model.add(layers.Conv2D(128, (4, 4), strides=(2, 2), padding='same'))
+    model.add(layers.LayerNormalization())
     model.add(layers.LeakyReLU())
     model.add(layers.Dropout(0.3))
 
     model.add(layers.Conv2D(256, (4, 4), strides=(2, 2), padding='same'))
-    model.add(layers.LayerNormalization())
-    model.add(layers.Dropout(0.3))
-
-    model.add(layers.Conv2D(512, (4, 4), strides=(2, 2), padding='same'))
     model.add(layers.LayerNormalization())
     model.add(layers.LeakyReLU())
 
@@ -150,30 +157,31 @@ def train_step(real_images, latent_dim, discriminator_extra_steps = 1, gp_weight
     generator_optimizer.apply_gradients(
         zip(gen_gradient, generator.trainable_variables)
     )
-    return {"d_loss": d_loss, "g_loss": g_loss}
+    return {"d_loss": tf.abs(d_loss), "g_loss": tf.abs(g_loss)}
 
 
-def train(dataset, map_meta, epochs, z_dim = 100):
+def train(dataset, map_meta, keys_pref, epochs, z_dim = 100):
     critic_ts_loss = list()
     gen_ts_loss = list()
     seed = tf.random.normal([1, z_dim]) # 1 is the enumber of examples to generate
-    map_keys = ['thingsmap', 'heightmap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 'leftwalltexturemap']
     # Start training
     for epoch in range(epochs):
+        n = 0
         start = time.time() 
-        for i,image_batch in enumerate(dataset):
+        for image_batch in dataset:
             for rotation in [0, 90, 180, 270]:
-                images = np.stack([image_batch[m] for m in map_keys], axis=-1)
-                scaled_images = scaling_maps(images, map_meta, map_keys)
+                images = np.stack([image_batch[m] for m in keys_pref], axis=-1)
+                scaled_images = scaling_maps(images, map_meta, keys_pref)
                 # Rotating images to account for different orientations
                 x_batch = tfa.image.rotate(scaled_images, math.radians(rotation))                
                 for flip in [0, 1]:
                     if flip:
                         x_batch = tf.image.flip_left_right(x_batch)
+                    n+=1
                     step_loss = train_step(x_batch,z_dim)
                     critic_ts_loss.append(step_loss['d_loss'])
                     gen_ts_loss.append(step_loss['g_loss'])
-            print ('Time for batch {} is {} sec'.format(i+1, time.time()-start))
+                    print ('Time for batch {} is {} sec'.format(n, time.time()-start))
             
         generate_and_save_images(generator, epoch + 1, seed)
 
@@ -197,16 +205,18 @@ discriminator = make_discriminator_model()
 generator_optimizer = tf.keras.optimizers.Adam(2e-4)
 discriminator_optimizer = tf.keras.optimizers.Adam(2e-4)
 
-checkpoint_dir = './training_checkpoints'
+checkpoint_dir = './training_checkpoints/wgan'
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
 checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                  discriminator_optimizer=discriminator_optimizer,
                                  generator=generator,
                                  discriminator=discriminator)
 
-# if os.path.exists(checkpoint_dir):                            
-#     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+if os.path.exists(checkpoint_dir):                            
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
 
 EPOCHS = 100
-train(training_set,map_meta,EPOCHS)
+
+map_keys = ['heightmap', 'wallmap', 'other', 'monsters']
+train(training_set,map_meta,map_keys,EPOCHS)

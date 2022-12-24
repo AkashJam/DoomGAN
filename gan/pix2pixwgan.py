@@ -1,6 +1,6 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
-import time, math
+import time, math, os
 import numpy as np
 from matplotlib import pyplot as plt
 from ganmeta import read_record, scaling_maps
@@ -40,7 +40,7 @@ def upsample(filters, size, apply_dropout=False):
   return result
 
 def Generator():
-  inputs = tf.keras.layers.Input(shape=[128, 128, 2])
+  inputs = tf.keras.layers.Input(shape=[256, 256, 2])
 
   down_stack = [
     downsample(64, 4, apply_batchnorm=False),  # (batch_size, 64, 64, 64)
@@ -50,9 +50,11 @@ def Generator():
     downsample(512, 4),  # (batch_size, 4, 4, 512)
     downsample(512, 4),  # (batch_size, 2, 2, 512)
     downsample(512, 4),  # (batch_size, 1, 1, 512)
+    downsample(512, 4),  # (batch_size, 1, 1, 512)
   ]
 
   up_stack = [
+    upsample(512, 4, apply_dropout=True),  # (batch_size, 2, 2, 1024)
     upsample(512, 4, apply_dropout=True),  # (batch_size, 2, 2, 1024)
     upsample(512, 4, apply_dropout=True),  # (batch_size, 4, 4, 1024)
     upsample(512, 4, apply_dropout=True),  # (batch_size, 8, 8, 1024)
@@ -104,8 +106,8 @@ def generator_loss(disc_generated_output, gen_output, target, LAMBDA = 100):
 def Discriminator():
   initializer = tf.random_normal_initializer(0., 0.02)
 
-  inp = tf.keras.layers.Input(shape=[128, 128, 2], name='input_image')
-  tar = tf.keras.layers.Input(shape=[128, 128, 1], name='target_image')
+  inp = tf.keras.layers.Input(shape=[256, 256, 2], name='input_image')
+  tar = tf.keras.layers.Input(shape=[256, 256, 1], name='target_image')
 
   x = tf.keras.layers.concatenate([inp, tar])  # (batch_size, 128, 128, 3)
 
@@ -149,15 +151,15 @@ def generate_images(model, test_input, tar, epoch, batch):
   plt.figure(figsize=(15, 15))
 
   display_list = [test_input[0,:,:,0],test_input[0,:,:,1], tar[0], prediction[0]]
-  title = ['Height Map', 'Wall Map', 'Ground Truth', 'Predicted Image']
+  title = ['Floor Map', 'Wall Map', 'Ground Truth', 'Predicted Image']
 
   for i in range(4):
     plt.subplot(2, 2, i+1)
     plt.title(title[i])
     # Getting the pixel values in the [0, 1] range to plot.
-    plt.imshow(display_list[i] * 0.5 + 0.5)
+    plt.imshow(display_list[i])
     plt.axis('off')
-  plt.savefig('generated_maps/things_map/image_at_batch_{:04d}_in_epoch_{:04d}.png'.format(batch,epoch))
+  plt.savefig('generated_maps/things_map/image_at_epoch_{:04d}_in_batch_{:04d}.png'.format(epoch,batch))
   plt.close()
 #   plt.show()
 
@@ -184,28 +186,52 @@ def train_step(input_image, target):
 
 def train(dataset, map_meta, epochs):
   start = time.time()
-
+  # map_keys= list(map_meta.keys())
   for epoch in range(epochs):
-        start = time.time() 
-        cl_per_batch = list()
-        gl_per_batch = list()
-        for i,image_batch in enumerate(dataset):
-            for rotation in [0, 90, 180, 270]:
-                input = np.stack([image_batch[m] for m in ['heightmap','wallmap']], axis=-1)
-                target = np.stack(image_batch['thingsmap']).reshape((32, 128, 128, 1))
-                scaled_input = scaling_maps(input, map_meta, ['heightmap','wallmap'])
-                scaled_target = scaling_maps(target, map_meta, ['thingsmap'])
-                # Rotating images to account for different orientations
-                x_input = tfa.image.rotate(scaled_input, math.radians(rotation))
-                x_target = tfa.image.rotate(scaled_target, math.radians(rotation))
-                for flip in [0, 1]:
-                    if flip:
-                        x_input = tf.image.flip_left_right(x_input)
-                        x_target = tf.image.flip_left_right(x_target)
-                    train_step(x_input, x_target)
-            
-            print ('Time for batch {} of epoch {} is {} sec'.format(i+1, epoch+1, time.time()-start))
-            generate_images(generator, x_input, x_target, epoch+1, i+1)
+    start = time.time() 
+    n = 0
+    # cl_per_batch = list()
+    # gl_per_batch = list()
+    for image_batch in dataset:
+      # for i in range(5):
+      #   plt.figure(figsize=(8, 4))
+      #   plt.subplot(1, 2, 1)
+      #   plt.imshow(image_batch['wallmap'][i,:,:])
+      #   plt.subplot(1, 2, 2)
+      #   plt.imshow(image_batch['floormap'][i,:,:])
+      #   plt.show()
+      for rotation in [0, 90, 180, 270]:
+        input = np.stack([image_batch[m] for m in ['floormap','wallmap']], axis=-1)
+        target = np.stack(image_batch['monsters']).reshape((32, 256, 256, 1))
+        # input = np.stack([image_batch[:,:,:,i] for i,m in enumerate(map_keys) if m in ['heightmap','wallmap']], axis=-1)
+        # target = np.stack(image_batch[:,:,:,i] for i,m in enumerate(map_keys) if m in ['other']).reshape((32, 128, 128, 1))
+        # target = np.stack([image_batch[:,:,:,i] for i,m in enumerate(map_keys) if m in['other', 'obstacles', ' monsters']], axis=-1)
+        scaled_input = scaling_maps(input, map_meta, ['floormap','wallmap'])
+        scaled_target = scaling_maps(target, map_meta, ['monsters'])
+        x_input = tfa.image.rotate(scaled_input, math.radians(rotation))
+        x_target = tfa.image.rotate(scaled_target, math.radians(rotation))
+        for flip in [0, 1]:
+          if flip:
+              x_input = tf.image.flip_left_right(x_input)
+              x_target = tf.image.flip_left_right(x_target)
+          n+=1
+          train_step(x_input, x_target)
+          print ('Time for batch {} of epoch {} is {} sec'.format(n, epoch+1, time.time()-start))
+          generate_images(generator, x_input, x_target, epoch+1, n)
+
+        if (epoch + 1) % 3 == 0:
+          checkpoint.save(file_prefix = checkpoint_prefix)
+          # generate_loss_graph(critic_ts_loss, gen_ts_loss)
+
+checkpoint_dir = './training_checkpoints/pix2pix'
+checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
+                                 discriminator_optimizer=discriminator_optimizer,
+                                 generator=generator,
+                                 discriminator=discriminator)
+
+# if os.path.exists(checkpoint_dir):                            
+#     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
 training_set, map_meta = read_record()
 train(training_set, map_meta, epochs=1000)
