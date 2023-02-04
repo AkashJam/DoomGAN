@@ -138,6 +138,7 @@ class WADFeatureExtractor(object):
 
     def draw_thingsmap(self, level_dict, wad_features, mapsize_px):
         # thingsmap = np.zeros(mapsize_px, dtype=np.uint8)
+        # For segregating individual things type
         cate = ThingTypes.get_all_categories()
         thingsmap = dict()
         for cat in cate:
@@ -151,7 +152,10 @@ class WADFeatureExtractor(object):
             if is_unknown or out_of_bounds:
                 continue
             tx, ty = self._rescale_coord(thing['x'], thing['y'], wad_features)
-            
+            # if thingsmap[tx, ty] in ThingTypes.get_index_by_category('start'):
+            #     # Avoid overwriting of player start location if something else is placed there (like a teleporter)
+            #     continue
+            # thingsmap[tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
             if category in cate:
                 thingsmap[category][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
         return thingsmap

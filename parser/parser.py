@@ -40,6 +40,8 @@ def parse_wads(wad_ids, dataset_path):
           wad_with_features = reader.extract(wad_path+file)
           if wad_with_features is not None and not wad_with_features['wad']['exception']:
             levels = wad_with_features["levels"]
+            # plt.imshow(levels[0]['maps']['thingsmap'])
+            # plt.show()
             print('added level', id, 'from', file)
             # feature_map = levels[0]["maps"]
             # feature_map.update(levels[0]["features"])
@@ -70,6 +72,7 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   map_meta["ceilingtexturemap"] =  {"type": "uint8", "min": 0.0, "max": graphics_meta["flats"]}
   map_meta["rightwalltexturemap"] = {"type": "uint8", "min": 0.0, "max": graphics_meta["textures"]}
   map_meta["leftwalltexturemap"] = {"type": "uint8", "min": 0.0, "max": graphics_meta["textures"]}
+  # map_meta["thingsmap"] = {"type": "uint8", "min": 0.0, "max": 123.0}
 
   obj = dict()
   cate = ThingTypes.get_all_categories()
@@ -101,7 +104,7 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-  file = save_path + 'metadata.json'
+  file = save_path + 'metadataset.json'
   with open(file, 'w') as jsonfile:
     json.dump(map_dict, jsonfile)
   return map_dict
@@ -120,7 +123,7 @@ def serialize_array(array):
 
 
 # pads the maps to show relatve scale
-def map_padding(mat,meta,keys, cate):
+def map_padding(mat, meta, keys, cate, pad = True):
   mat_height = mat['floormap'].shape[0]
   mat_width = mat['floormap'].shape[1]
   scale_height = math.floor(meta['max_height']/100)
@@ -135,9 +138,9 @@ def map_padding(mat,meta,keys, cate):
   for key in keys:
     if key == 'thingsmap':
       for cat in cate:
-        padded_map[cat] = np.pad(mat[key][cat], ((x, x), (y, y)), 'constant')
+        padded_map[cat] = np.pad(mat[key][cat], ((x, x), (y, y)), 'constant') if pad else mat[key][cat]
     else:
-      padded_map[key] = np.pad(mat[key], ((x, x), (y, y)), 'constant')
+      padded_map[key] = np.pad(mat[key], ((x, x), (y, y)), 'constant') if pad else mat[key]
   return padded_map
 
 
@@ -171,7 +174,6 @@ def doom_parser(wads_path,keys,cate,save_path):
   feature_maps, wads, meta = parse_wads(wad_ids, wads_path)
   metadata = metadata_gen(wads,keys,cate,save_path,meta,graphics["meta"])
   generate_tfrecord(feature_maps,keys,cate,save_path,metadata)
-
 
 
 dataset_path = '../dataset/scraped/doom/'

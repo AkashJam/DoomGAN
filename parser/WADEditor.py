@@ -2,6 +2,7 @@ from struct import *
 import warnings
 import re, os, json
 import Lumps
+import matplotlib # required for DLL not found error
 from skimage import io
 import networkx as nx
 from WADFeatureExtractor import WADFeatureExtractor
