@@ -3,14 +3,14 @@ import tensorflow_addons as tfa
 import time, math, os
 import numpy as np
 from matplotlib import pyplot as plt
-from ganmeta import read_record, scaling_maps
+from ganmeta import read_record, scaling_maps, generate_loss_graph
 
 def downsample(filters, size, apply_batchnorm=True):
   initializer = tf.random_normal_initializer(0., 0.02)
 
   result = tf.keras.Sequential()
   result.add(
-      tf.keras.layers.Conv2D(filters, size, strides=2, padding='same',
+      tf.keras.layers.Conv2D(filters, size, strides=4, padding='same',
                              kernel_initializer=initializer, use_bias=False))
 
   if apply_batchnorm:
@@ -25,7 +25,7 @@ def upsample(filters, size, apply_dropout=False):
 
   result = tf.keras.Sequential()
   result.add(
-    tf.keras.layers.Conv2DTranspose(filters, size, strides=2,
+    tf.keras.layers.Conv2DTranspose(filters, size, strides=4,
                                     padding='same',
                                     kernel_initializer=initializer,
                                     use_bias=False))
@@ -43,29 +43,29 @@ def Generator():
   inputs = tf.keras.layers.Input(shape=[256, 256, 2])
 
   down_stack = [
-    downsample(32, 4, apply_batchnorm=False),  # (batch_size, 64, 64, 64)
-    downsample(64, 4),  # (batch_size, 32, 32, 128)
-    downsample(128, 4),  # (batch_size, 16, 16, 256)
-    downsample(256, 4),  # (batch_size, 8, 8, 512)
-    downsample(256, 4),  # (batch_size, 4, 4, 512)
-    downsample(256, 4),  # (batch_size, 2, 2, 512)
-    downsample(256, 4),  # (batch_size, 1, 1, 512)
-    downsample(256, 4),  # (batch_size, 1, 1, 512)
+    downsample(32, 8, apply_batchnorm=False),  # (batch_size, 64, 64, 64)
+    downsample(64, 8),  # (batch_size, 32, 32, 128)
+    downsample(128, 8),  # (batch_size, 16, 16, 256)
+    downsample(256, 8),  # (batch_size, 8, 8, 512)
+    # downsample(256, 4),  # (batch_size, 4, 4, 512)
+    # downsample(256, 4),  # (batch_size, 2, 2, 512)
+    # downsample(256, 4),  # (batch_size, 1, 1, 512)
+    # downsample(256, 4),  # (batch_size, 1, 1, 512)
   ]
 
   up_stack = [
-    upsample(256, 4, apply_dropout=True),  # (batch_size, 2, 2, 1024)
-    upsample(256, 4, apply_dropout=True),  # (batch_size, 2, 2, 1024)
-    upsample(256, 4, apply_dropout=True),  # (batch_size, 4, 4, 1024)
-    upsample(256, 4, apply_dropout=True),  # (batch_size, 8, 8, 1024)
-    upsample(128, 4),  # (batch_size, 16, 16, 512)
-    upsample(64, 4),  # (batch_size, 32, 32, 256)
-    upsample(32, 4),  # (batch_size, 64, 64, 128)
+    # upsample(256, 4, apply_dropout=True),  # (batch_size, 2, 2, 1024)
+    # upsample(256, 4, apply_dropout=True),  # (batch_size, 2, 2, 1024)
+    # upsample(256, 4, apply_dropout=True),  # (batch_size, 4, 4, 1024)
+    # upsample(256, 4, apply_dropout=True),  # (batch_size, 8, 8, 1024)
+    upsample(128, 8),  # (batch_size, 16, 16, 512)
+    upsample(64, 8),  # (batch_size, 32, 32, 256)
+    upsample(32, 8),  # (batch_size, 64, 64, 128)
   ]
 
   initializer = tf.random_normal_initializer(0., 0.02)
-  last = tf.keras.layers.Conv2DTranspose(4, 4,
-                                         strides=2,
+  last = tf.keras.layers.Conv2DTranspose(4, 8,
+                                         strides=4,
                                          padding='same',
                                          kernel_initializer=initializer,
                                          activation='tanh')  # (batch_size, 128, 128, 1)
@@ -183,22 +183,17 @@ def train_step(input_image, target):
                                           generator.trainable_variables))
   discriminator_optimizer.apply_gradients(zip(discriminator_gradients,
                                               discriminator.trainable_variables))
+  
+  return {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss)}
 
 def train(dataset, map_meta, inp_param, opt_param, epochs):
   start = time.time()
   # map_keys= list(map_meta.keys())
+  disc_ts_loss = list()
+  gen_ts_loss = list()
   for epoch in range(epochs):
-    start = time.time() 
-    # cl_per_batch = list()
-    # gl_per_batch = list()
+    start = time.time()
     for image_batch in dataset:
-      # for i in range(5):
-      #   plt.figure(figsize=(8, 4))
-      #   plt.subplot(1, 2, 1)
-      #   plt.imshow(image_batch['wallmap'][i,:,:])
-      #   plt.subplot(1, 2, 2)
-      #   plt.imshow(image_batch['floormap'][i,:,:])
-      #   plt.show()
       for rotation in [0, 90, 180, 270]:
         input = np.stack([image_batch[m] for m in inp_param], axis=-1)
         # target = np.stack(image_batch['monsters']).reshape((32, 256, 256, 1))
@@ -213,13 +208,15 @@ def train(dataset, map_meta, inp_param, opt_param, epochs):
           if flip:
               x_input = tf.image.flip_left_right(x_input)
               x_target = tf.image.flip_left_right(x_target)
-          train_step(x_input, x_target)
+          step_loss = train_step(x_input, x_target)
+          disc_ts_loss.append(step_loss['d_loss'])
+          gen_ts_loss.append(step_loss['g_loss'])  
     print ('Time for epoch {} is {} sec'.format(epoch+1, time.time()-start))
     generate_images(generator, x_input, x_target, epoch+1)
 
     if (epoch + 1) % 10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
-          # generate_loss_graph(critic_ts_loss, gen_ts_loss)
+      generate_loss_graph(disc_ts_loss, gen_ts_loss,'generated_maps/things_map/convergence_graph.png')
 
 checkpoint_dir = './training_checkpoints/pix2pix'
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")

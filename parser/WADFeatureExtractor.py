@@ -19,11 +19,14 @@ class WADFeatureExtractor(object):
 
 
 
-    def _rescale_coord(self, x_du, y_du, wad_features, factor=16):
+    def _rescale_coord(self, x_du, y_du, wad_features):#, factor=16):
         x_centered = x_du - wad_features['x_min']
         y_centered = y_du - wad_features['y_min']
-        x = np.floor(x_centered / factor).astype(np.int32)
-        y = np.floor(y_centered / factor).astype(np.int32)
+        size = 127 # Since indices are from 0 to 127
+        x = np.floor((x_centered * size) / (wad_features['x_max']-wad_features['x_min'])).astype(np.int32)
+        y = np.floor((y_centered * size) / (wad_features['y_max']-wad_features['y_min'])).astype(np.int32)
+        # x = np.floor(x_centered / factor).astype(np.int32)
+        # y = np.floor(y_centered / factor).astype(np.int32)
         return x, y
 
 
@@ -257,8 +260,8 @@ class WADFeatureExtractor(object):
 
         mapsize_du = np.array([wad_features['width'], wad_features['height']])
         # rescaling maps to 1 pixel for 16 DOOM units
-        mapsize_px = np.ceil(mapsize_du / 16).astype(np.int32)
-
+        # mapsize_px = np.ceil(mapsize_du / 16).astype(np.int32)
+        mapsize_px = [128, 128]
         # computing these maps require the knowledge of the level width and height
         #tag_map is an intermediate map needed to build the trigger map
         maps['wallmap'], maps['heightmap'], maps['triggermap'], maps['floortexturemap'], maps['ceilingtexturemap'], maps['rightwalltexturemap'], maps['leftwalltexturemap'] = self.draw_sector_maps(level_dict, mapsize_px, wad_features)

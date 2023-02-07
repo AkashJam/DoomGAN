@@ -40,9 +40,7 @@ def parse_wads(wad_ids, dataset_path):
           wad_with_features = reader.extract(wad_path+file)
           if wad_with_features is not None and not wad_with_features['wad']['exception']:
             levels = wad_with_features["levels"]
-            # plt.imshow(levels[0]['maps']['thingsmap'])
-            # plt.show()
-            print('added level', id, 'from', file)
+            # Adding extracted features with the map
             # feature_map = levels[0]["maps"]
             # feature_map.update(levels[0]["features"])
             # feature_maps.append(feature_map)
@@ -54,6 +52,7 @@ def parse_wads(wad_ids, dataset_path):
             if map.max() > maps_meta['max_rooms']: maps_meta['max_rooms'] = map.max()
             feature_maps.append(levels[0]["maps"])
             valid_dataset.append({'id':id, 'name':file})
+            print('added level', id, 'from', file)
             break
         except:
           print('failed to add level', id, 'from', file)
@@ -104,7 +103,7 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-  file = save_path + 'metadataset.json'
+  file = save_path + 'metadata.json'
   with open(file, 'w') as jsonfile:
     json.dump(map_dict, jsonfile)
   return map_dict
@@ -116,7 +115,7 @@ def _bytes_feature(value):
         value = value.numpy() # get value of tensor
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-
+# Created as it is unable to do it inline 
 def serialize_array(array):
   array = tf.io.serialize_tensor(array)
   return array
@@ -146,16 +145,13 @@ def map_padding(mat, meta, keys, cate, pad = True):
 
 # Write TFrecord file
 def generate_tfrecord(maps,keys_pref,cate_pref,save_path,meta):
-  file_name = 'dataset.tfrecords'
+  file_name = 'data.tfrecords'
   file_path = save_path + file_name
   keys = keys_pref+cate_pref
-  for key in keys: 
-    if key != 'thingsmap':
-      print(key) 
   with tf.io.TFRecordWriter(file_path) as writer:
     for map in maps:
-      padded_maps = map_padding(map,meta,keys_pref,cate_pref)
-      serialized_array = {key: serialize_array(padded_maps[key]) for key in keys if key != 'thingsmap'}
+      # padded_maps = map_padding(map,meta,keys_pref,cate_pref)
+      serialized_array = {key: serialize_array(map[key]) for key in keys if key != 'thingsmap'}
       feature = {key: _bytes_feature(serialized_array[key]) for key in keys if key != 'thingsmap'}
       example_message = tf.train.Example(features=tf.train.Features(feature=feature))
       writer.write(example_message.SerializeToString())
@@ -171,8 +167,8 @@ def doom_parser(wads_path,keys,cate,save_path):
     print('generate graphics json first')
     sys.exit()
   wad_ids = read_json(wads_path)
-  feature_maps, wads, meta = parse_wads(wad_ids, wads_path)
-  metadata = metadata_gen(wads,keys,cate,save_path,meta,graphics["meta"])
+  feature_maps, wad_list, meta = parse_wads(wad_ids, wads_path)
+  metadata = metadata_gen(wad_list,keys,cate,save_path,meta,graphics["meta"])
   generate_tfrecord(feature_maps,keys,cate,save_path,metadata)
 
 

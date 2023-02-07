@@ -7,6 +7,14 @@ from skimage import io
 import networkx as nx
 from WADFeatureExtractor import WADFeatureExtractor
 
+import itertools
+import subprocess
+import numpy as np
+from skimage import morphology
+from Dictionaries.ThingTypes import *
+from RoomTopology import topological_features
+from flags import linedef_flags_to_int
+
 class LumpInfo(dict):
     def __init__(self, filepos=None, size=None, name=None):
         """
@@ -238,6 +246,453 @@ class WAD(dict):
         for lumpinfo in self['directory']:
             wad_bytes += lumpinfo.to_bytes()
         return wad_bytes
+
+
+class WADWriter(object):
+    def __init__(self, scale_factor=64):
+        """
+        Class for writing a WAD file.
+        Start by defining a new level with add_level(), then place new sectors and "things". Changes are submitted only
+         on save or on the addition of a new level, since some optimization are due (duplicated vertices check, etc).
+        """
+        # due to the way the WAD works, for keeping track of the lumps size for filling the dictionary the byte representation is
+        # needed. But for checking duplicated vertices/linedefs/etc it would be needed to convert back each lump before the
+        # check. For avoiding this problem, a set of lumps is stored in the writer and written only when the level is
+        # fully specified.
+        self.wad = WAD('W')
+        self.current_level = None
+        self.lumps = {'THINGS':Lumps.Things(), 'LINEDEFS':Lumps.Linedefs(), 'VERTEXES':Lumps.Vertexes(),'SIDEDEFS': Lumps.Sidedefs(), 'SECTORS':Lumps.Sectors()}  # Temporary lumps for this level
+        self.scale_factor = scale_factor
+
+    def _sector_orientation(self, vertices):
+        """
+        Check if the polygon is oriented clock-wise or counter-clockwise.
+        If the polygon is not closed, then closes it
+        :param vertices: the input vertices
+        :return: (Bool, vertices) True if clockwise, False otherwise.
+        """
+        if not vertices[0] == vertices[-1]:
+            vertices.append(vertices[0])
+        xy = np.transpose(np.array(vertices))
+        x, y = xy[0], xy[1]
+        return np.dot(x, np.roll(y, 1)) - np.dot(y, np.roll(x, 1)) > 0, vertices
+
+    def _rescale_coords(self, v):
+        return tuple(int(a * self.scale_factor) for a in v)
+
+    def _get_random_enemy(self):
+        return np.random.choice([3004, 9, 3001, 3002], 1, p=[0.3, 0.1, 0.4, 0.2]).item()
+
+    def from_images(self, floormap, heightmap, wallmap, thingsmap, place_enemies=True):
+        if isinstance(floormap, str):
+            floormap = io.imread(floormap).astype(dtype=np.bool)
+        if isinstance(heightmap, str):
+            heightmap = io.imread(heightmap).astype(np.uint8)
+        if isinstance(wallmap, str):
+            wallmap = io.imread(wallmap).astype(dtype=np.bool)
+        if isinstance(thingsmap, str):
+            thingsmap = io.imread(thingsmap).astype(np.uint8)
+
+        walkable = np.logical_and(floormap, np.logical_not(wallmap)) if wallmap is not None else floormap
+        walkable = morphology.remove_small_objects(walkable)
+        walkable = morphology.remove_small_holes(walkable)
+
+        roommap, graph, metrics = topological_features(walkable, prepare_for_doom=True)
+        graph = self.decorate_graph(graph, roommap, heightmap, thingsmap)
+
+        self.from_graph(graph, place_enemies=place_enemies)
+
+
+    def decorate_graph(self, G, roommap, heightmap, thingsmap):
+        """
+        Adds information about the heightmap and the thingsmap in the region adjacency graph.
+        :param roommap:
+        :param heightmap:
+        :param thingsmap:
+        :return: updated G
+        """
+        # Selecting candidates for starting and exiting nodes:
+        # leaves of the spanning tree are the most suitable
+        # Connected components (floors)
+
+        H = G.copy()
+        H.remove_node(0)
+        floors = sorted(nx.connected_components(H), key=len, reverse=True)
+        level_solution = list()
+        corrected_heights = dict()
+
+        for id, floor_rooms in enumerate(floors):
+            # Creating a spanning tree for each floor
+            F = H.subgraph(floor_rooms)
+            T = nx.minimum_spanning_tree(F)
+            degree = T.degree()
+            # Entry point has minimum node degree
+            floor_entry = min(degree, key=degree.get)
+            # Finding all paths in the level to determine the best exit (longest path)
+            paths = list()
+            for n in T.nodes():
+                p = list(nx.all_simple_paths(T, floor_entry, n))
+                if len(p) > 0:
+                    paths += p
+                else:
+                    # If a floor has a single room then there are no path from n to n and a max cannot be calculated
+                    paths += [[n]]
+
+            floor_solution = max(paths, key=len)
+            level_solution.append(floor_solution)
+
+            # Fixing the heights along all paths so every path becomes walkable
+            for path in paths:
+                for rid, room in enumerate(path):
+                    if room not in corrected_heights:
+                        height = np.nanmedian(np.where(roommap == room, heightmap, np.nan))
+                        if rid > 0:
+                            # Alter this room height to be walkable
+                            if height > path[rid-1] + 24:
+                                height = path[rid-1] + 24
+                        corrected_heights[room] = int(height)
+        nx.set_node_attributes(G, "height", corrected_heights)
+
+        for id, floor_path in enumerate(level_solution):
+            if id == 0:
+                # Place the level start
+                start_x, start_y = G.node[floor_path[0]]["centroid"]
+                nx.set_node_attributes(G, "level_start", {floor_path[0]: {"location": (start_x, start_y)}})
+            else:
+                # place a teleport source
+                possible_places = np.stack(np.where(roommap==floor_path[0]), axis=1)
+                random_pixel_index = np.random.choice(possible_places.shape[0])
+                x, y = possible_places[random_pixel_index]
+
+                nx.set_node_attributes(G, "floor_start", {floor_path[0]: {"location": (x, y)}})
+            if id == len(level_solution)-1:
+                # This is the last floor to visit, place the level exit
+                possible_places = np.stack(np.where(roommap == floor_path[0]), axis=1)
+                random_pixel_index = np.random.choice(possible_places.shape[0])
+                x, y = possible_places[random_pixel_index]
+                nx.set_node_attributes(G, "level_exit", {floor_path[-1]: {"location": (x, y)}})
+            else:
+                # There's another unvisited floor, place a teleporter to the next floor
+                possible_places = np.stack(np.where(roommap==floor_path[-1]), axis=1)
+                random_pixel_index = np.random.choice(possible_places.shape[0])
+                x, y = possible_places[random_pixel_index]
+
+                nx.set_node_attributes(G, "floor_exit", {floor_path[-1]: {"destination":level_solution[id+1][0], "location": (x, y)}})
+
+        level_objects = {}
+        # Scanning the room for objects
+        for room in H.nodes():
+            things_in_room = (roommap == room)*thingsmap
+            things_pixels_indices = np.delete(np.unique(things_in_room), 0)
+            # Converting thing pixels to doom types
+            things_types = [get_type_id_from_index(i) for i in things_pixels_indices]
+            categories = [get_category_from_type_id(t) for t in things_types]
+
+            things_dict = {}
+
+            for thing_id, thing_type, thing_cat in zip(things_pixels_indices, things_types, categories):
+                # skipping generated player starts teleports and keys since they are placed statically
+                if thing_cat is not None and thing_cat not in ["other", "start", "keys"]:
+                    if thing_cat not in things_dict:
+                        things_dict[thing_cat] = {}
+                    if thing_type not in things_dict[thing_cat]:
+                        things_dict[thing_cat][thing_type] = []
+
+                    x_list, y_list = np.where(things_in_room==thing_id)
+                    for x, y in zip(x_list, y_list):
+                        things_dict[thing_cat][thing_type].append((x, y))
+            level_objects[room] = things_dict
+
+        nx.set_node_attributes(G, "things", level_objects)
+
+        return G
+
+    def from_graph(self, graph, place_enemies=True):
+        """
+        Builds a level exploiting information stored in the room adjacency graph. Treat each room as a different sector.
+        :param graph:
+        :return:
+        """
+        edge_attr_sidedef = dict()  # Dictionary for updating edge attributes
+        node_attr_sectors = dict()  # Dictionary for updating edge attributes
+        heights = nx.get_node_attributes(graph, "height")
+        # Creating a sector for each room
+        for n in graph.nodes():
+            if n == 0:
+                continue
+            # Create a sector
+            node_attr_sectors[n] = self.lumps['SECTORS'].add_sector(floor_height=int(heights[n]), ceiling_height=128+int(max(heights.values())), floor_flat='FLOOR0_1', ceiling_flat='FLOOR4_1', lightlevel=255,
+                                                         special_sector=0, tag=int(n))
+        nx.set_node_attributes(graph, 'sector_id', node_attr_sectors)
+
+        # Creating two sidedefs for each edge and the corresponding linedef
+        for i, j in graph.edges():
+            if i == 0:
+                # linedef flag is impassable and the right sidedef is j
+                j_walls = graph.node[j]["walls"]
+                walls = [w for w in j_walls if w[1] == i or w[1] is None] # Check this if there's any problem in the corners
+                for wall_piece in walls:
+                    start = self.lumps['VERTEXES'].add_vertex(self._rescale_coords(wall_piece[0][0]))
+                    end = self.lumps['VERTEXES'].add_vertex(self._rescale_coords(wall_piece[0][1]))
+                    # - Right sidedef is j
+                    right_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0,
+                                                                      upper_texture='BRONZE1',
+                                                                      lower_texture='BRONZE1',
+                                                                      middle_texture='BRONZE1',
+                                                                      sector=graph.node[j]["sector_id"])
+                    # - Make a linedef
+                    linedef = self.lumps['LINEDEFS'].add_linedef(start, end, flags=linedef_flags_to_int(impassable=True), types=0,
+                                               trigger=0, right_sidedef_index=right_sidedef)
+                    # Save the linedef into the edge
+                    if (i,j) not in edge_attr_sidedef:
+                        edge_attr_sidedef[(i,j)] = list()
+                    edge_attr_sidedef[(i, j)].append(right_sidedef)
+            else:
+                i_walls = graph.node[i]["walls"]
+                # linedef is invisible
+                # Get the boundaries from i to j
+                walls_ij = [w for w in i_walls if w[1] == j]
+                for wall_piece in walls_ij:
+                    start = self.lumps['VERTEXES'].add_vertex(self._rescale_coords(wall_piece[0][0]))
+                    end = self.lumps['VERTEXES'].add_vertex(self._rescale_coords(wall_piece[0][1]))
+                    # - Right sidedef is i
+                    right_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0,
+                                                                      upper_texture='BRONZE1',
+                                                                      lower_texture='BRONZE1',
+                                                                      middle_texture='-',
+                                                                      sector=graph.node[i]["sector_id"])
+                    # - Left sidedef is j (in j list there's the reversed linedef)
+                    left_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0,
+                                                                      upper_texture='BRONZE1',
+                                                                      lower_texture='BRONZE1',
+                                                                      middle_texture='-',
+                                                                      sector=graph.node[j]["sector_id"])
+                    # - Make a linedef
+                    linedef = self.lumps['LINEDEFS'].add_linedef(start, end, flags=linedef_flags_to_int(twosided=True), types=0,
+                                               trigger=0, right_sidedef_index=right_sidedef,
+                                               left_sidedef_index=left_sidedef)
+                    # Save the linedef into the edge
+                    if (i, j) not in edge_attr_sidedef:
+                        edge_attr_sidedef[(i, j)] = list()
+                    edge_attr_sidedef[(i, j)].append(right_sidedef)
+                    edge_attr_sidedef[(i, j)].append(left_sidedef)
+            # Actually update edge attribnutes
+            nx.set_edge_attributes(graph, 'sidedef', edge_attr_sidedef)
+
+        if place_enemies:
+            # THINGS PLACEMENT
+            level_things = nx.get_node_attributes(graph, "things")
+            for n, catlist in level_things.items():
+                for cat, thinglist in catlist.items():
+                    for thingtype, coordlist in thinglist.items():
+                        for coord in coordlist:
+                            # THIS IS A FIX FOR AVOIDING TOO MANY BOSSES IN THE LEVEL
+                            if cat == "monsters":
+                                thingtype = self._get_random_enemy()
+
+                            x, y = self._rescale_coords(coord)
+                            self.add_thing(x, y, thingtype)
+
+        # START AND TELEPORTERS
+        for n, l_start in nx.get_node_attributes(graph, "level_start").items():
+            x,y = self._rescale_coords(l_start["location"])
+            self.set_start(x, y)
+            print("Setting Start at {},{}".format(x,y))
+        for n, f_start in nx.get_node_attributes(graph, "floor_start").items():
+            x, y = self._rescale_coords(f_start["location"])
+            self.add_teleporter_destination(x, y)
+            print("Setting teleport dest at {},{}".format(x, y))
+        for n, f_exit in nx.get_node_attributes(graph, "floor_exit").items():
+            x, y = self._rescale_coords(f_exit["location"])
+            self.add_teleporter_source(x, y, to_sector=f_exit["destination"], inside=int(n))
+            print("Setting teleport source at {},{}".format(x, y))
+        for n, l_exit in nx.get_node_attributes(graph, "level_exit").items():
+            x, y = self._rescale_coords(l_exit["location"])
+            self.add_level_exit(x, y, inside=int(n), floor_height=int(graph.node[n]["height"])-16, ceiling_height=128+int(graph.node[n]["height"])-16)
+
+    def add_teleporter_destination(self, x, y):
+        self.add_thing(x, y, thing_type=14)
+
+    def add_teleporter_source(self, x, y, to_sector, inside, size=32):
+        """
+        Place a teleporter cell to a sector
+        :param x: x coordinate of the beacon
+        :param y: y coordinate of the beacon
+        :param to_sector: destination sector
+        :param inside: Sector number in which this teleporter is placed
+        :param size: size of the teleporter
+        :return: None
+        """""
+        x=int(x)
+        y=int(y)
+        to_sector=int(to_sector)
+        halfsize=size//2
+        vertices = list(reversed([(x-halfsize, y+halfsize),(x+halfsize, y+halfsize),(x+halfsize, y-halfsize),(x-halfsize, y-halfsize)]))
+        self.add_sector(vertices, floor_flat='GATE1', kw_sidedef={'upper_texture':'-', 'lower_texture':'-', 'middle_texture':'-'}, kw_linedef={'flags':4, 'type':97, 'trigger': to_sector}, surrounding_sector_id=inside)
+
+
+
+    def set_start(self, x, y):
+        self.lumps['THINGS'].add_thing(int(x), int(y), angle=0, type=1, options=0)
+
+    def add_thing(self, x,y, thing_type, options=7, angle=0):
+        self.lumps['THINGS'].add_thing(int(x), int(y), angle=angle, type=int(thing_type), options=options)
+
+    def add_door(self,vertices_coords, parent_sector, tag=None, remote=False, texture='DOORTRAK'):
+        """
+        adds a door with a given tag. If tag is left unspecified, then it will be equal to the sector index.
+        :param vertices_coords:
+        :param parent_sector:
+        :param tag:
+        :param remote:
+        :param texture:
+        :return:
+        """
+        height = self.lumps['SECTORS'][parent_sector]['floor_height']
+        type = 1 if not remote else 0
+        tag = len(self.lumps['SECTORS']) if tag is None else tag
+        return self.add_sector(vertices_coords, ceiling_height=height, kw_sidedef={'upper_texture':texture, 'lower_texture':texture, 'middle_texture':'-'}, kw_linedef={'type':type, 'flags':4, 'trigger':0}, tag=tag, surrounding_sector_id=parent_sector, hollow=False)
+
+    def add_level_exit(self, x, y, inside, floor_height, ceiling_height, size=32):
+        """
+        Place the level exit
+        :param x: x coordinate of the beacon
+        :param y: y coordinate of the beacon
+        :param inside: Sector number in which this teleporter is placed
+        :param ceiling_height: Ceiling height for the "EXIT" sign
+        :param size: size of the teleporter
+        :return: None
+        """""
+        x=int(x)
+        y=int(y)
+        halfsize=size//2
+        vertices = list(reversed([(x-halfsize, y+halfsize),(x+halfsize, y+halfsize),(x+halfsize, y-halfsize),(x-halfsize, y-halfsize)]))
+        self.add_sector(vertices, floor_flat='GATE1', kw_sidedef={'upper_texture':'EXITSIGN', 'lower_texture':'-', 'middle_texture':'-'}, kw_linedef={'flags':4, 'type':52, 'trigger': 0}, surrounding_sector_id=inside, floor_height=floor_height,
+                        ceiling_height=ceiling_height)
+
+
+
+    def add_trigger(self, vertices_coords, parent_sector, trigger_type, trigger_tag, texture='SW1CMT'):
+        return self.add_sector(vertices_coords,
+                               kw_sidedef={'upper_texture': 'BRONZE1', 'lower_texture': 'BRONZE1', 'middle_texture': texture},
+                               kw_linedef={'type': trigger_type, 'flags': 1, 'trigger': trigger_tag}, tag=0,
+                               surrounding_sector_id=parent_sector, hollow=False)
+
+    def add_sector(self, vertices_coords, floor_height=0, ceiling_height=128, floor_flat='FLOOR0_1', ceiling_flat='FLOOR4_1', lightlevel=256, special=0, tag=0, surrounding_sector_id=None, hollow=False, kw_sidedef=None, kw_linedef=None):
+        """
+         Adds a sector with given vertices coordinates, creating all the necessary linedefs and sidedefs and return the relative
+        sector id for passing the reference to other sectors or objects if needed
+        :param vertices_coords: Vertices coordinates (x,y),(x2,y2).. If given in CLOCKWISE order then the room will have
+        its right linedefs facing INWARD, the left one can be left unspecified (i.e. sorrounding_sector_id = None e.g. for the outermost sector)
+        and the hollow parameter has no effect.
+          If vertices are in COUNTER-CLOCKWISE order, then you are defining a sector with RIGHT SIDEDEFS facing outside,
+          for that reason the sorrounding_sector_id parameter is mandatory and you are creating a sector inside another sector,
+          like a column, a wall or a door. You can set if the linedefs can contain an actual sector or not with the "hollow" parameter.
+        :param floor_height: height of the floor in doom map units
+        :param ceiling_height:
+        :param floor_flat:
+        :param ceiling_flat:
+        :param lightlevel:
+        :param special:
+        :param tag:
+        :param wall_texture:
+        :param surrounding_sector_id: sector id (returned by this function itself) for the sector that surrounds the one you are creating. Can be None only if the vertices are specified in clockwise order, since a linedef must have a sector on its right side.
+        :param hollow: Has effect only for counter-clockwise specified sectors. Determines if the sector you are creating does actually contains a sector (like for doors) or it's just a hole surrounded by walls/linedefs, like the column or other static structures. Default to False.
+        :param kw_linedef: (Optional) A list of dictionaries containing the parameters for each linedef, or a single dictionary if all linedefs share the same parameters. Must have the indices: 'type', 'trigger' and 'flags'. Default: {'type':0, 'flags':17, 'trigger':0}
+        :return:
+        """
+        # In order to add a sector one must add:
+        # A vertex for each vertex in the sector, only if not already present
+        # a linedef for each edge, if not already present
+        # a sidedef for each linedef, put on the correct side of the linedef
+        # the sector lump itself
+
+        # Create a sector
+        sector_id = self.lumps['SECTORS'].add_sector(floor_height, ceiling_height, floor_flat, ceiling_flat, lightlevel, special, tag)
+
+
+        # Create and lookup vertices
+        vertices_id = list()
+        for v in vertices_coords:
+            v_id = self.lumps['VERTEXES'].add_vertex(v)
+            vertices_id.append(v_id)
+        clockwise, _ = self._sector_orientation(vertices_coords)
+        # Iterate over (v0, v1), (v1, v2), ..., (vn-1, vn).
+        # Adding the first element at the end for closing the polygon
+        startiter, enditer = itertools.tee(vertices_id+[vertices_id[0]], 2)
+        next(enditer, None)  # shift the end iterator by one
+        for segcounter, (start, end) in enumerate(zip(startiter, enditer)):
+            if kw_sidedef is None:
+                kw_sidedef = {'upper_texture':'-', 'lower_texture':'-', 'middle_texture':'BRONZE1'}
+            if clockwise:
+                # The room has the right sidedef facing surrounding_sector_id, toward the new sector
+                right_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0, upper_texture=kw_sidedef['upper_texture'], lower_texture=kw_sidedef['lower_texture'],
+                                                   middle_texture=kw_sidedef['middle_texture'], sector=sector_id)
+                if surrounding_sector_id is not None:
+                    left_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0, upper_texture=kw_sidedef['upper_texture'], lower_texture=kw_sidedef['lower_texture'], middle_texture=kw_sidedef['middle_texture'], sector=surrounding_sector_id)
+                else:
+                    left_sidedef=-1
+            else:
+                # The room has the right sidedef facing outside, towards the sorrounding sector
+                right_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0,
+                                                                   upper_texture=kw_sidedef['upper_texture'],
+                                                                   lower_texture=kw_sidedef['lower_texture'],
+                                                                   middle_texture=kw_sidedef['middle_texture'],
+                                                                   sector=surrounding_sector_id)
+                if not hollow:
+                    left_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0,
+                                                                      upper_texture=kw_sidedef['upper_texture'],
+                                                                      lower_texture=kw_sidedef['lower_texture'],
+                                                                      middle_texture=kw_sidedef['middle_texture'],
+                                                                      sector=sector_id)
+                else:
+                    left_sidedef = -1
+
+            # Linedef creation/Lookup
+            if kw_linedef is None:
+                linedef_params = {'type':0, 'flags':17, 'trigger':0}
+            elif isinstance(kw_linedef, dict):
+                linedef_params = kw_linedef
+            elif isinstance(kw_linedef, list):
+                linedef_params = kw_linedef[segcounter]
+            else:
+                raise ValueError("kw_linedef can only be None, a Dict or a list of Dict.")
+            self.lumps['LINEDEFS'].add_linedef(start, end, flags=linedef_params['flags'], types=linedef_params['type'], trigger=linedef_params['trigger'], right_sidedef_index=right_sidedef, left_sidedef_index=left_sidedef)
+        return sector_id
+
+    def _commit_level(self):
+        """
+        Writes the set of lumps to the WAD object
+        :return:
+        """
+        assert self.current_level is not None, "Cannot write a level with an empty name"
+        # Create a new level descriptor in the lump directory
+        self.wad.add_lump(self.current_level, None)
+        # Add the lumps to WAD file
+        self.wad.add_lump('THINGS', self.lumps['THINGS'])
+        self.wad.add_lump('LINEDEFS', self.lumps['LINEDEFS'])
+        self.wad.add_lump('SIDEDEFS', self.lumps['SIDEDEFS'])
+        self.wad.add_lump('VERTEXES', self.lumps['VERTEXES'])
+        self.wad.add_lump('SECTORS', self.lumps['SECTORS'])
+        self.lumps = {'THINGS':Lumps.Things(), 'LINEDEFS':Lumps.Linedefs(), 'VERTEXES':Lumps.Vertexes(),'SIDEDEFS': Lumps.Sidedefs(), 'SECTORS':Lumps.Sectors()}
+
+    def add_level(self, name='MAP01'):
+        # If it's not the first level, then commit the previous
+        if self.current_level is not None:
+            self._commit_level()
+        self.current_level = name
+
+    def save(self, fp, call_node_builder=True):
+        # Always commit the last level
+        self._commit_level()
+        wad_bytes = self.wad.to_bytes()
+        with open(fp,'wb') as out:
+            out.write(wad_bytes)
+        if call_node_builder:
+            # Calling ZenNode to build subsectors and other lumps needed to play the level on doom
+            print('Calling ZenNode...')
+            subprocess.check_call(["ZenNode", fp, '-o', fp],shell=True)
+
 
 
 class WADReader(object):

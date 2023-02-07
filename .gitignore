@@ -2,6 +2,7 @@
 dataset/
 generated_maps/
 training_checkpoints/
+*.wad
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

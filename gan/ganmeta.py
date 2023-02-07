@@ -5,10 +5,8 @@ import numpy as np
 from tensorflow.python.ops.numpy_ops import np_config
 np_config.enable_numpy_behavior()
 
-save_path = '../dataset/parsed/doom/'
-
-def read_json():
-    file_path = save_path + 'metadataset.json'
+def read_json(save_path = '../dataset/parsed/doom/'):
+    file_path = save_path + 'metadata.json'
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
             map_meta = json.load(jsonfile)
@@ -17,8 +15,8 @@ def read_json():
         print('No metadata found')
         sys.exit()
 
-def read_record(batch_size=32): 
-    file_path = save_path + 'dataset.tfrecords'
+def read_record(batch_size=32, save_path='../dataset/parsed/doom/'): 
+    file_path = save_path + 'data.tfrecords'
     metadata = read_json()
     if not os.path.isfile(file_path):
         print('No dataset record found')
@@ -30,52 +28,57 @@ def read_record(batch_size=32):
     return train_set.shuffle(metadata['count']*100).batch(batch_size, drop_remainder=True), metadata['maps_meta']
 
 
-# Read TFRecord file
-def parse_tfrecord(record,meta):
-    dataset = list()
-    map_keys = list(meta['maps_meta'].keys())
-    map_size = [256,256]
-    parse_dic = {
-        key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
-        }
-    features = dict()
-    # print(meta['max_height'],meta['max_width'],meta['min_height'],meta['min_width'])
-    for element in record:
-        example_message = tf.io.parse_single_example(element, parse_dic)
-        for key in map_keys:
-            b_feature = example_message[key] # get byte string
-            feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
-            features[key] = feature
-        unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
-        scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
-        feats = dict()
-        for i,key in enumerate(map_keys):
-            feats[key] = scaled_feat[:,:,i]
+# Read TF Records and View the scaled maps
+# def parse_tfrecord(record,meta):
+#     dataset = list()
+#     map_keys = list(meta['maps_meta'].keys())
+#     map_size = [256,256]
+#     parse_dic = {
+#         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
+#         }
+#     features = dict()
+#     # print(meta['max_height'],meta['max_width'],meta['min_height'],meta['min_width'])
+#     for element in record:
+#         example_message = tf.io.parse_single_example(element, parse_dic)
+#         for key in map_keys:
+#             b_feature = example_message[key] # get byte string
+#             feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
+#             features[key] = feature
+#         unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
+#         scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
+#         feats = dict()
+#         for i,key in enumerate(map_keys):
+#             feats[key] = scaled_feat[:,:,i]
 
-        feats['floormap'] = (feats['floormap']>0).astype(np.uint8)*255
-        feats['wallmap'] = (feats['wallmap']>0).astype(np.uint8)*255
-        # tf.map_fn(fn=lambda t: [1 if n>0 else 0 for n in t], elems=feats['wallmap'])
-        plt.figure(figsize=(8, 8))
-        plt.subplot(2, 2, 1)
-        plt.imshow(features['floormap'])
-        plt.subplot(2, 2, 2)
-        plt.imshow(feats['floormap'])
-        plt.subplot(2, 2, 3)
-        plt.imshow(features['wallmap'])
-        plt.subplot(2, 2, 4)
-        plt.imshow(feats['wallmap'])
-        plt.show()
-        dataset.append(scaled_feat)
-        break
+#         feats['floormap'] = (feats['floormap']>0).astype(np.uint8)*255
+#         feats['wallmap'] = (feats['wallmap']>0).astype(np.uint8)*255
+#         # tf.map_fn(fn=lambda t: [1 if n>0 else 0 for n in t], elems=feats['wallmap'])
+#         plt.figure(figsize=(8, 8))
+#         plt.subplot(2, 2, 1)
+#         plt.title('original floormap')
+#         plt.imshow(features['floormap'])
+#         plt.subplot(2, 2, 2)
+#         plt.title('scaled floormap')
+#         plt.imshow(feats['floormap'])
+#         plt.subplot(2, 2, 3)
+#         plt.title('original monsters')
+#         plt.imshow(features['monsters'])
+#         plt.subplot(2, 2, 4)
+#         plt.title('scaled monsters')
+#         plt.imshow(feats['monsters'])
+#         plt.show()
+#         dataset.append(scaled_feat)
+#         break
 
-    train_set = tf.data.Dataset.from_tensors(dataset)
-    return train_set
+#     train_set = tf.data.Dataset.from_tensors(dataset)
+#     return train_set
 
 
+# Read the TF Records
 def _parse_tfr_element(element):
     metadata = read_json()
     map_keys = list(metadata['maps_meta'].keys())
-    map_size = [128, 128] 
+    # map_size = [256, 256] 
     parse_dic = {
         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
         }
@@ -85,13 +88,13 @@ def _parse_tfr_element(element):
         b_feature = example_message[key] # get byte string
         feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
         features[key] = feature
-    unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
-    scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
-    for i,key in enumerate(map_keys):
-        if key in ['floormap','wallmap']:
-            features[key] = (scaled_feat[:,:,i]>0).astype(np.uint8)*255
-        else:
-            features[key] = scaled_feat[:,:,i]
+    # unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
+    # scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
+    # for i,key in enumerate(map_keys):
+    #     if key in ['floormap','wallmap']:
+    #         features[key] = (scaled_feat[:,:,i]>0).astype(np.uint8)*255
+    #     else:
+    #         features[key] = scaled_feat[:,:,i]
     return features
 
 
@@ -128,7 +131,7 @@ def scaling_maps(x, map_meta, map_names, use_sigmoid=True):
     return a + ((x-min)*(b-a))/(max-min)
 
 
-def generate_loss_graph(d_loss,g_loss):
+def generate_loss_graph(d_loss,g_loss,location = 'generated_maps/convergence_graph.png'):
     plt.figure
     plt.title('Convergence Graph')
     plt.xlabel('Number of Steps')
@@ -136,7 +139,7 @@ def generate_loss_graph(d_loss,g_loss):
     plt.plot(d_loss, label='Dis Loss')
     plt.plot(g_loss, label='Gen Loss')
     plt.legend() # must be after labels
-    plt.savefig('generated_maps/convergence_graph.png')
+    plt.savefig(location)
     plt.close()
     # plt.show()
 
