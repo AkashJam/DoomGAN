@@ -19,12 +19,21 @@ class WADFeatureExtractor(object):
 
 
 
-    def _rescale_coord(self, x_du, y_du, wad_features):#, factor=16):
+    def _rescale_coord(self, x_du, y_du, wad_features, size = [256, 256], pad = True):
         x_centered = x_du - wad_features['x_min']
         y_centered = y_du - wad_features['y_min']
-        size = 127 # Since indices are from 0 to 127
-        x = np.floor((x_centered * size) / (wad_features['x_max']-wad_features['x_min'])).astype(np.int32)
-        y = np.floor((y_centered * size) / (wad_features['y_max']-wad_features['y_min'])).astype(np.int32)
+        # Providing decreasing amount of padding for inscreasing size
+        x_max = wad_features['x_max']-wad_features['x_min']
+        y_max = wad_features['y_max']-wad_features['y_min']
+        if pad:
+            pad_x = (250 - x_max/100)*10 if x_max/25000 < 1 else 0
+            pad_y = (250 - y_max/100)*10 if y_max/25000 < 1 else 0
+            # Size -1 since indices are from 0 to 255
+            x = np.floor(((x_centered+pad_x) * (size[0]-1)) / (x_max+pad_x*2)).astype(np.int32)
+            y = np.floor(((y_centered+pad_y) * (size[1]-1)) / (y_max+pad_y*2)).astype(np.int32)
+        else:
+            x = np.floor((x_centered * size) / x_max).astype(np.int32)
+            y = np.floor((y_centered * size) / y_max).astype(np.int32)
         # x = np.floor(x_centered / factor).astype(np.int32)
         # y = np.floor(y_centered / factor).astype(np.int32)
         return x, y
@@ -140,12 +149,12 @@ class WADFeatureExtractor(object):
         return wallmap, heightmap, triggermap, floortexturemap, ceilingtexturemap, rightwalltexturemap, leftwalltexturemap
 
     def draw_thingsmap(self, level_dict, wad_features, mapsize_px):
-        # thingsmap = np.zeros(mapsize_px, dtype=np.uint8)
         # For segregating individual things type
         cate = ThingTypes.get_all_categories()
         thingsmap = dict()
         for cat in cate:
             thingsmap[cat] = np.zeros(mapsize_px, dtype=np.uint8)
+        thingsmap['thingsmap'] = np.zeros(mapsize_px, dtype=np.uint8)
         things = level_dict['lumps']['THINGS']
         for thing in things:
             category = ThingTypes.get_category_from_type_id(thing['type'])
@@ -155,12 +164,12 @@ class WADFeatureExtractor(object):
             if is_unknown or out_of_bounds:
                 continue
             tx, ty = self._rescale_coord(thing['x'], thing['y'], wad_features)
-            # if thingsmap[tx, ty] in ThingTypes.get_index_by_category('start'):
-            #     # Avoid overwriting of player start location if something else is placed there (like a teleporter)
-            #     continue
-            # thingsmap[tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
             if category in cate:
                 thingsmap[category][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
+            if thingsmap['thingsmap'][tx, ty] in ThingTypes.get_index_by_category('start'):
+                # Avoid overwriting of player start location if something else is placed there (like a teleporter)
+                continue
+            thingsmap['thingsmap'][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
         return thingsmap
 
     def draw_textmap(self, maps):
@@ -261,7 +270,7 @@ class WADFeatureExtractor(object):
         mapsize_du = np.array([wad_features['width'], wad_features['height']])
         # rescaling maps to 1 pixel for 16 DOOM units
         # mapsize_px = np.ceil(mapsize_du / 16).astype(np.int32)
-        mapsize_px = [128, 128]
+        mapsize_px = [256, 256]
         # computing these maps require the knowledge of the level width and height
         #tag_map is an intermediate map needed to build the trigger map
         maps['wallmap'], maps['heightmap'], maps['triggermap'], maps['floortexturemap'], maps['ceilingtexturemap'], maps['rightwalltexturemap'], maps['leftwalltexturemap'] = self.draw_sector_maps(level_dict, mapsize_px, wad_features)

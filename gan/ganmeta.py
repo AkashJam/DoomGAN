@@ -6,7 +6,7 @@ from tensorflow.python.ops.numpy_ops import np_config
 np_config.enable_numpy_behavior()
 
 def read_json(save_path = '../dataset/parsed/doom/'):
-    file_path = save_path + 'metadata.json'
+    file_path = save_path + 'metadataset.json'
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
             map_meta = json.load(jsonfile)
@@ -16,7 +16,7 @@ def read_json(save_path = '../dataset/parsed/doom/'):
         sys.exit()
 
 def read_record(batch_size=32, save_path='../dataset/parsed/doom/'): 
-    file_path = save_path + 'data.tfrecords'
+    file_path = save_path + 'dataset.tfrecords'
     metadata = read_json()
     if not os.path.isfile(file_path):
         print('No dataset record found')
@@ -29,49 +29,55 @@ def read_record(batch_size=32, save_path='../dataset/parsed/doom/'):
 
 
 # Read TF Records and View the scaled maps
-# def parse_tfrecord(record,meta):
-#     dataset = list()
-#     map_keys = list(meta['maps_meta'].keys())
-#     map_size = [256,256]
-#     parse_dic = {
-#         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
-#         }
-#     features = dict()
-#     # print(meta['max_height'],meta['max_width'],meta['min_height'],meta['min_width'])
-#     for element in record:
-#         example_message = tf.io.parse_single_example(element, parse_dic)
-#         for key in map_keys:
-#             b_feature = example_message[key] # get byte string
-#             feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
-#             features[key] = feature
-#         unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
-#         scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
-#         feats = dict()
-#         for i,key in enumerate(map_keys):
-#             feats[key] = scaled_feat[:,:,i]
+def parse_tfrecord(record,meta):
+    dataset = list()
+    map_keys = list(meta['maps_meta'].keys())
+    map_size = [256,256]
+    parse_dic = {
+        key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
+        }
+    features = dict()
+    # print(meta['max_height'],meta['max_width'],meta['min_height'],meta['min_width'])
+    for element in record:
+        example_message = tf.io.parse_single_example(element, parse_dic)
+        for key in map_keys:
+            b_feature = example_message[key] # get byte string
+            feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
+            features[key] = feature
+        unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
+        scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
+        feats = dict()
+        for i,key in enumerate(map_keys):
+            feats[key] = scaled_feat[:,:,i]
 
-#         feats['floormap'] = (feats['floormap']>0).astype(np.uint8)*255
-#         feats['wallmap'] = (feats['wallmap']>0).astype(np.uint8)*255
-#         # tf.map_fn(fn=lambda t: [1 if n>0 else 0 for n in t], elems=feats['wallmap'])
-#         plt.figure(figsize=(8, 8))
-#         plt.subplot(2, 2, 1)
-#         plt.title('original floormap')
-#         plt.imshow(features['floormap'])
-#         plt.subplot(2, 2, 2)
-#         plt.title('scaled floormap')
-#         plt.imshow(feats['floormap'])
-#         plt.subplot(2, 2, 3)
-#         plt.title('original monsters')
-#         plt.imshow(features['monsters'])
-#         plt.subplot(2, 2, 4)
-#         plt.title('scaled monsters')
-#         plt.imshow(feats['monsters'])
-#         plt.show()
-#         dataset.append(scaled_feat)
-#         break
+        feats['floormap'] = (feats['floormap']>0).astype(np.uint8)*255
+        feats['wallmap'] = (feats['wallmap']>0).astype(np.uint8)*255
+        # tf.map_fn(fn=lambda t: [1 if n>0 else 0 for n in t], elems=feats['wallmap'])
+        plt.figure(figsize=(16, 8))
+        plt.subplot(2, 3, 1)
+        plt.title('thingsmap')
+        plt.imshow(features['thingsmap'])
+        plt.subplot(2, 3, 2)
+        plt.title('wallmap')
+        plt.imshow(features['wallmap'])
+        plt.subplot(2, 3, 3)
+        plt.title('monsters')
+        plt.imshow(features['monsters'])
+        plt.subplot(2, 3, 4)
+        plt.title('weapons')
+        plt.imshow(features['weapons'])
+        plt.subplot(2, 3, 5)
+        plt.title('ammunitions')
+        plt.imshow(features['ammunitions'])
+        plt.subplot(2, 3, 6)
+        plt.title('other')
+        plt.imshow(features['other'])
+        plt.show()
+        dataset.append(scaled_feat)
+        break
 
-#     train_set = tf.data.Dataset.from_tensors(dataset)
-#     return train_set
+    train_set = tf.data.Dataset.from_tensors(dataset)
+    return train_set
 
 
 # Read the TF Records
@@ -103,10 +109,10 @@ def generate_and_save_images(model, epoch, test_input):
   # This is so all layers run in inference mode (batchnorm).
   predictions = model(test_input, training=False)
 
-  fig = plt.figure(figsize=(16, 8))
+  fig = plt.figure(figsize=(8, 8))
 
-  for i in range(2):
-      plt.subplot(1, 2, i+1)
+  for i in range(4):
+      plt.subplot(2, 2, i+1)
       plt.imshow(predictions[0, :, :, i] * 127.5 + 127.5, cmap='gray')
       plt.axis('off')
 

@@ -259,7 +259,7 @@ def topological_features(floormap, prepare_for_doom=False):
     metrics["distmap-Q1".format(met)] = np.percentile(values, 25)
     metrics["distmap-Q2".format(met)] = np.percentile(values, 50)
     metrics["distmap-Q3".format(met)] = np.percentile(values, 75)
-    # roommap = int(roommap) # converting to int to make it JSON serializeable
+    roommap = np.uint8(roommap) # converting to int to make it JSON serializeable
     return roommap, room_graph, metrics
 
 def quality_metrics(sample, maps):
