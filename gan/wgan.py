@@ -12,43 +12,43 @@ def make_generator_model(b_size=32,z_dim=100):
     # try to convert it for 256^2, which will start from 16*16*512 till 256*256*4 = 131,072 + 65,536 + 131,072 + 262,144 + 65,536 = 655,360 params
     model = tf.keras.Sequential()
     model.add(layers.InputLayer((z_dim,), batch_size=b_size))
-    model.add(layers.Dense(4*4*2048, use_bias=False, input_shape=(z_dim,))) # try 8*8*1024 -> 512 -> 256 -> 128 -> 4 with batch size 32 else 16
+    model.add(layers.Dense(8*8*512, use_bias=False, input_shape=(z_dim,))) # try 8*8*1024 -> 512 -> 256 -> 128 -> 4 with batch size 32 else 16
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
     
-    model.add(layers.Reshape((4, 4, 2048))) #Check if you can reduce the dense layer and rechape it
+    model.add(layers.Reshape((8, 8, 512))) #Check if you can reduce the dense layer and rechape it
 
     model.add(layers.Conv2DTranspose(1024, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
-    assert model.output_shape == (b_size, 8, 8, 1024)  # Note: None is the batch size
+    assert model.output_shape == (b_size, 16, 16, 1024)  # Note: None is the batch size
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
     model.add(layers.Conv2DTranspose(512, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
-    assert model.output_shape == (b_size, 16, 16, 512)
+    assert model.output_shape == (b_size, 32, 32, 512)
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
     model.add(layers.Conv2DTranspose(256, (4, 4), strides=(2, 2), padding='same', use_bias= False))
-    assert model.output_shape == (b_size, 32, 32, 256)
+    assert model.output_shape == (b_size, 64, 64, 256)
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
     model.add(layers.Conv2DTranspose(128, (4, 4), strides=(2, 2), padding='same', use_bias=False))
-    assert model.output_shape == (b_size, 64, 64, 128)
+    assert model.output_shape == (b_size, 128, 128, 128)
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
-    model.add(layers.Conv2DTranspose(4, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='tanh')) 
-    assert model.output_shape == (b_size, 128, 128, 4)
+    model.add(layers.Conv2DTranspose(4, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')) 
+    assert model.output_shape == (b_size, 256, 256, 4)
     return model
 
 
 def make_discriminator_model(b_size=32):
     # from 256*256*4 to 1 = 2,097,152 + 
     model = tf.keras.Sequential()
-    model.add(layers.InputLayer((128, 128, 4), batch_size=b_size))
+    model.add(layers.InputLayer((256, 256, 4), batch_size=b_size))
     model.add(layers.Conv2D(128, (4, 4), strides=(2, 2), padding='same',
-                                     input_shape=[128, 128, 4]))
+                                     input_shape=[256, 256, 4]))
     model.add(layers.LeakyReLU())
     # model.add(layers.Dropout(0.3))
 
@@ -201,8 +201,8 @@ def train(dataset, map_meta, keys_pref, epochs, z_dim = 100):
     generate_and_save_images(generator, epochs, seed)
 
 
-batch_size = 32
-training_set, map_meta = read_record(batch_size)
+batch_size = 16
+training_set, map_meta, sample = read_record(batch_size)
 generator = make_generator_model(batch_size)
 discriminator = make_discriminator_model(batch_size)
 generator_optimizer = tf.keras.optimizers.Adam(2e-4)
@@ -221,5 +221,5 @@ checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
 
 EPOCHS = 500
 
-map_keys = ['heightmap', 'wallmap', 'floormap', 'roommap']
+map_keys = ['heightmap', 'wallmap', 'floormap', 'thingsmap']
 train(training_set,map_meta,map_keys,EPOCHS)

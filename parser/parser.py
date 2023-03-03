@@ -40,22 +40,24 @@ def parse_wads(wad_ids, dataset_path):
           wad_with_features = reader.extract(wad_path+file)
           if wad_with_features is not None and not wad_with_features['wad']['exception']:
             levels = wad_with_features["levels"]
-            # Adding extracted features with the map
-            # feature_map = levels[0]["maps"]
-            # feature_map.update(levels[0]["features"])
-            # feature_maps.append(feature_map)
-            # plt.imshow(levels[0]["maps"]["roommap"])
-            # plt.show()
-            map = levels[0]["maps"]["roommap"]
-            if map.shape[1] < maps_meta['min_width']: maps_meta['min_width'] = map.shape[1]
-            if map.shape[0] < maps_meta['min_height']: maps_meta['min_height'] = map.shape[0]
-            if map.shape[1] > maps_meta['max_width']: maps_meta['max_width'] = map.shape[1]
-            if map.shape[0] > maps_meta['max_height']: maps_meta['max_height'] = map.shape[0]
-            if map.max() > maps_meta['max_rooms']: maps_meta['max_rooms'] = map.max()
-            feature_maps.append(levels[0]["maps"])
-            valid_dataset.append({'id':id, 'name':file})
-            print('added level', id, 'from', file)
-            break
+            features = levels[0]["features"]
+            if features["number_of_monsters"]>0 and features["number_of_weapons"]>0 and features["start_location_x_px"] != -1 and features["start_location_y_px"] != -1:
+              # Adding extracted features with the map
+              # feature_map = levels[0]["maps"]
+              # feature_map.update(levels[0]["features"])
+              # feature_maps.append(feature_map)
+              # plt.imshow(levels[0]["maps"]["roommap"])
+              # plt.show()
+              map = levels[0]["maps"]["roommap"]
+              if map.shape[1] < maps_meta['min_width']: maps_meta['min_width'] = map.shape[1]
+              if map.shape[0] < maps_meta['min_height']: maps_meta['min_height'] = map.shape[0]
+              if map.shape[1] > maps_meta['max_width']: maps_meta['max_width'] = map.shape[1]
+              if map.shape[0] > maps_meta['max_height']: maps_meta['max_height'] = map.shape[0]
+              if map.max() > maps_meta['max_rooms']: maps_meta['max_rooms'] = map.max()
+              feature_maps.append(levels[0]["maps"])
+              valid_dataset.append({'id':id, 'name':file})
+              print('added level', id, 'from', file)
+              break
         except:
           print('failed to add level', id, 'from', file)
     # if len(valid_dataset) >= 12: break
@@ -179,5 +181,5 @@ save_path = '../dataset/parsed/doom/'
 # All the generated maps are ['thingsmap', 'floormap', 'wallmap', 'heightmap', 'triggermap', 'roommap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 
 # 'leftwalltexturemap'] with things map containing ['start','other', 'keys', 'decorations', 'obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 keys = ['floormap', 'wallmap', 'heightmap', 'triggermap', 'roommap', 'thingsmap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap','leftwalltexturemap']
-things_cate = ['other', 'keys','obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
+things_cate = ['start', 'other', 'keys','obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 doom_parser(dataset_path,keys,things_cate,save_path)
