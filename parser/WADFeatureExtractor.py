@@ -155,6 +155,7 @@ class WADFeatureExtractor(object):
         for cat in cate:
             thingsmap[cat] = np.zeros(mapsize_px, dtype=np.uint8)
         thingsmap['thingsmap'] = np.zeros(mapsize_px, dtype=np.uint8)
+        thingsmap['essentials'] = np.zeros(mapsize_px, dtype=np.uint8)
         things = level_dict['lumps']['THINGS']
         for thing in things:
             category = ThingTypes.get_category_from_type_id(thing['type'])
@@ -166,6 +167,8 @@ class WADFeatureExtractor(object):
             tx, ty = self._rescale_coord(thing['x'], thing['y'], wad_features)
             if category in cate:
                 thingsmap[category][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
+            if thingsmap['essentials'][tx, ty] not in ThingTypes.get_index_by_category('start'):
+                thingsmap['essentials'][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'],essential = True)
             if thingsmap['thingsmap'][tx, ty] in ThingTypes.get_index_by_category('start'):
                 # Avoid overwriting of player start location if something else is placed there (like a teleporter)
                 continue
@@ -466,6 +469,7 @@ class WADFeatureExtractor(object):
         feature_dict["level_centroid_x"] = features[0]['centroid'][0]
         feature_dict["level_centroid_y"] = features[0]['centroid'][1]
 
+        feature_dict['has_teleporters'] = np.in1d([ThingTypes.get_index_from_type_id(14)],thingsmap['other']).any()
 
         feature_dict['number_of_artifacts'] = int(np.size(self._find_thing_category('artifacts', thingsmap['artifacts']), axis=-1))
         feature_dict['number_of_powerups'] = int(np.size(self._find_thing_category('powerups', thingsmap['powerups']), axis=-1))

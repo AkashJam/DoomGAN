@@ -6,7 +6,7 @@ from tensorflow.python.ops.numpy_ops import np_config
 np_config.enable_numpy_behavior()
 
 def read_json(save_path = '../dataset/parsed/doom/'):
-    file_path = save_path + 'metadataset_mons.json'
+    file_path = save_path + 'metadata.json'
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
             map_meta = json.load(jsonfile)
@@ -16,7 +16,7 @@ def read_json(save_path = '../dataset/parsed/doom/'):
         sys.exit()
 
 def read_record(batch_size=32, save_path='../dataset/parsed/doom/'): 
-    file_path = save_path + 'dataset_mons.tfrecords'
+    file_path = save_path + 'data.tfrecords'
     metadata = read_json()
     if not os.path.isfile(file_path):
         print('No dataset record found')
@@ -37,7 +37,6 @@ def parse_tfrecord(record,meta):
         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
         }
     features = dict()
-    # print(meta['max_height'],meta['max_width'],meta['min_height'],meta['min_width'])
     sample_id = random.randrange(meta['count'])
     for i,element in enumerate(record):
         if i != sample_id:
@@ -48,40 +47,21 @@ def parse_tfrecord(record,meta):
                 b_feature = example_message[key] # get byte string
                 feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
                 features[key] = feature
-            features['essentials'] = combine_maps(features)
-            # unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
-            # scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
-            # feats = dict()
-            # for i,key in enumerate(map_keys):
-            #     feats[key] = scaled_feat[:,:,i]
-
-            # feats['floormap'] = (feats['floormap']>0).astype(np.uint8)*255
-            # feats['wallmap'] = (feats['wallmap']>0).astype(np.uint8)*255
-            # # tf.map_fn(fn=lambda t: [1 if n>0 else 0 for n in t], elems=feats['wallmap'])
-            # plt.figure(figsize=(16, 8))
-            # plt.subplot(2, 3, 1)
-            # plt.title('thingsmap')
-            # plt.imshow(features['thingsmap'])
-            # plt.subplot(2, 3, 2)
-            # plt.title('wallmap')
-            # plt.imshow(features['wallmap'])
-            # plt.subplot(2, 3, 3)
-            # plt.title('monsters')
-            # plt.imshow(features['monsters'])
-            # plt.subplot(2, 3, 4)
-            # plt.title('weapons')
-            # plt.imshow(features['weapons'])
-            # plt.subplot(2, 3, 5)
-            # plt.title('ammunitions')
-            # plt.imshow(features['ammunitions'])
-            # plt.subplot(2, 3, 6)
-            # plt.title('other')
-            # plt.imshow(features['other'])
+            # plt.figure(figsize=(8, 8))
+            # plt.subplot(2, 2, 1)
+            # plt.imshow(features['floormap']* 127.5 + 127.5, cmap='gray')
+            # plt.axis('off')
+            # plt.subplot(2, 2, 2)
+            # plt.imshow(features['wallmap']* 127.5 + 127.5, cmap='gray')
+            # plt.axis('off')
+            # plt.subplot(2, 2, 3)
+            # plt.imshow(features['essentials']* 127.5 + 127.5, cmap='gray')
+            # plt.axis('off')
+            # plt.subplot(2, 2, 4)
+            # plt.imshow(features['heightmap']* 127.5 + 127.5, cmap='gray')
+            # plt.axis('off')
             # plt.show()
-            # dataset.append(features)
             break
-
-    # train_set = tf.data.Dataset.from_tensors(features)
     return features
 
 
@@ -89,7 +69,6 @@ def parse_tfrecord(record,meta):
 def _parse_tfr_element(element):
     metadata = read_json()
     map_keys = list(metadata['maps_meta'].keys())
-    # map_size = [256, 256] 
     parse_dic = {
         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
         }
@@ -99,14 +78,6 @@ def _parse_tfr_element(element):
         b_feature = example_message[key] # get byte string
         feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
         features[key] = feature
-    features['essentials'] = combine_maps(features)
-    # unscaled_feat = tf.stack([features[key] for key in map_keys], axis=-1)
-    # scaled_feat = tf.image.resize_with_pad(unscaled_feat, map_size[0], map_size[1], method='area') # resize the maps to specifed pixels
-    # for i,key in enumerate(map_keys):
-    #     if key in ['floormap','wallmap']:
-    #         features[key] = (scaled_feat[:,:,i]>0).astype(np.uint8)*255
-    #     else:
-    #         features[key] = scaled_feat[:,:,i]
     return features
 
 
@@ -115,12 +86,12 @@ def generate_and_save_images(model, epoch, test_input):
   # This is so all layers run in inference mode (batchnorm).
   predictions = model(test_input, training=False)
 
-  fig = plt.figure(figsize=(8, 8))
-
+  plt.figure(figsize=(8, 8))
   for i in range(4):
-      plt.subplot(2, 2, i+1)
-      plt.imshow(predictions[0, :, :, i] * 127.5 + 127.5, cmap='gray')
-      plt.axis('off')
+    plt.subplot(2, 2, i+1)
+    plt.imshow(predictions[0, :, :, i])
+    # plt.imshow(predictions[0, :, :, i] * 127.5 + 127.5, cmap='gray') 
+    plt.axis('off')
 
   plt.savefig('generated_maps/image_at_epoch_{:04d}.png'.format(epoch))
   plt.close()
@@ -143,43 +114,13 @@ def scaling_maps(x, map_meta, map_names, use_sigmoid=True):
     return a + ((x-min)*(b-a))/(max-min)
 
 
-def generate_loss_graph(d_loss,g_loss,location = 'generated_maps/convergence_graph.png'): #,gan_loss,l_loss
+def generate_loss_graph(d_loss,g_loss,location = 'generated_maps/convergence_graph.png'):
     plt.figure
     plt.title('Convergence Graph')
     plt.xlabel('Number of Steps')
     plt.ylabel('Loss')
     plt.plot(d_loss, label='Dis Loss')
     plt.plot(g_loss, label='Gen Loss')
-    # plt.plot(gan_loss, label='Gan Loss')
-    # plt.plot(l_loss, label='L1 Loss')
     plt.legend() # must be after labels
     plt.savefig(location)
     plt.close()
-    # plt.show()
-
-
-def combine_maps(maps):
-    monsters = (maps['monsters']>0).astype(tf.half)*0.25
-    player_ammo = (maps['ammunitions']>0).astype(tf.half)*0.5
-    player_guns = (maps['weapons']>0).astype(tf.half)*0.75
-    # start = ThingTypes.get_index_from_type_id(1)
-    player_start = (maps['start']==3).astype(tf.half)
-    # np.where(ThingTypes.get_type_id_from_index(maps['other'])==1, 3, 0)
-    things = tf.math.maximum(monsters,player_ammo)
-    player_weapons = tf.math.maximum(player_guns,things)
-    player_things = tf.math.maximum(player_start,player_weapons)
-    # plt.figure(figsize=(8, 8))
-    # plt.subplot(2, 2, 1)
-    # plt.title('ammo')
-    # plt.imshow(player_ammo)
-    # plt.subplot(2, 2, 2)
-    # plt.title('weapons')
-    # plt.imshow(player_guns)
-    # plt.subplot(2, 2, 3)
-    # plt.title('start')
-    # plt.imshow(player_start)
-    # plt.subplot(2, 2, 4)
-    # plt.title('players_things')
-    # plt.imshow(player_things)
-    # plt.show()
-    return player_things

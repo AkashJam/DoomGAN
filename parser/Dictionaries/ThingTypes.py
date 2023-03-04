@@ -158,6 +158,12 @@ for category in categories:
     all_things += things[category]
 all_types= [i['int'] for i in all_things] # Contains the list of Thing types id used by doom (in the same order of 'all_things')
 
+essentials = list()
+for category in ['monsters', 'ammunitions', 'weapons']:
+    essentials += things[category]
+essentials += [things['other'][2]]
+essentials= [i['int'] for i in essentials]
+
 def get_all_categories():
     return categories+['start']
 
@@ -184,6 +190,8 @@ def get_index_by_category(category):
     :param category: 'start', 'artifacts', 'powerups', 'weapons', 'ammunitions', 'keys', 'monsters', 'obstacles', 'decorations', 'other'
     :return: list() of indices corresponding to 'category'
     """
+    if category == "essentials":
+        return [essentials.index(t) + 1 for t in essentials]
     if category != 'start':
         return [all_things.index(t) + 1 for t in things[category]]
     else:
@@ -191,25 +199,36 @@ def get_index_by_category(category):
         return [all_things.index(t) + 1 for t in start_things]
 
 
-def get_type_id_from_index(index):
+def get_type_id_from_index(index, essential = False):
     """
     Get a thing type (Doom shortint) from an index (1-123)
     :param index: A index or thingsmap pixel color (1-123)
     :return: The corresponding doom thing type_id (int) or None if the index is 0 or out of range
     """
-    if index < 1 or index > len(all_things):
-        return None
-    return all_things[index-1]['int']
+    if essential:
+        if index < 1 or index > len(essentials):
+            return None
+        return essentials[index-1]['int']
+    else:
+        if index < 1 or index > len(all_things):
+            return None
+        return all_things[index-1]['int']
 
-def get_index_from_type_id(thing_type):
+def get_index_from_type_id(thing_type,essential=False):
     """
     Get the index (or thingsmap pixel color) for a given thing type.
     :param thing_type: A doom thing type_id (int)
     :return: an index (1-123) if the thing type is known, 0 otherwise
     """
-    if thing_type not in all_types:
-        return None
+    if essential:
+        if thing_type not in essentials:
+            return 0
+        else:
+            return essentials.index(thing_type)+1
     else:
-        return all_types.index(thing_type)+1
+        if thing_type not in all_types:
+            return None
+        else:
+            return all_types.index(thing_type)+1
 
 

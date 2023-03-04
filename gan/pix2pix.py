@@ -4,7 +4,7 @@ import time, math, os
 import numpy as np
 from matplotlib import pyplot as plt
 from ganmeta import read_record, scaling_maps, generate_loss_graph
-import tensorflow_model_optimization as tfmot
+# import tensorflow_model_optimization as tfmot
 
 def downsample(filters, size, stride, apply_batchnorm=True):
   initializer = tf.random_normal_initializer(0., 0.02)
@@ -203,21 +203,17 @@ def train_step(input_image, target):
 
 def train(dataset, map_meta, sample, inp_param, opt_param, epochs, batch_size=32):
   start = time.time()
-  # map_keys= list(map_meta.keys())
   disc_ts_loss = list()
   gen_ts_loss = list()
   gan_ts_loss = list()
   l_ts_loss = list()
   sample_input = np.stack([sample[m] for m in inp_param], axis=-1).reshape((1, 256, 256, len(inp_param)))
-  scaled_sample_input = scaling_maps(sample_input, map_meta, inp_param)
   if len(opt_param) == 1:
     sample_target = np.stack(sample[opt_param[0]]).reshape((1, 256, 256, 1))
   else:
     sample_target = np.stack([sample[m] for m in opt_param], axis=-1).reshape((1, 256, 256, len(opt_param)))
-  if output_params[0] != "essentials":
-    scaled_sample_target = scaling_maps(sample_target, map_meta, opt_param)
-  else:
-    scaled_sample_target = sample_target
+  scaled_sample_input = scaling_maps(sample_input, map_meta, inp_param)
+  scaled_sample_target = scaling_maps(sample_target, map_meta, opt_param)
   # step_callback.on_train_begin()
   for epoch in range(epochs):
     n = 0
@@ -229,10 +225,7 @@ def train(dataset, map_meta, sample, inp_param, opt_param, epochs, batch_size=32
       else:
         target = np.stack([image_batch[m] for m in opt_param], axis=-1)
       scaled_input = scaling_maps(input, map_meta, inp_param)
-      if output_params[0] != "essentials":
-        scaled_target = scaling_maps(target, map_meta, opt_param)
-      else:
-        scaled_target = target
+      scaled_target = scaling_maps(target, map_meta, opt_param)
       for rotation in [0, 90, 180, 270]:
         x_input = tfa.image.rotate(scaled_input, math.radians(rotation))
         x_target = tfa.image.rotate(scaled_target, math.radians(rotation))
@@ -272,4 +265,4 @@ b_size = 16
 input_params = ['floormap', 'wallmap','heightmap']
 output_params = ['essentials']
 training_set, map_meta, sample = read_record(batch_size=b_size)
-train(training_set, map_meta, sample, input_params, output_params, epochs=200, batch_size=b_size)
+# train(training_set, map_meta, sample, input_params, output_params, epochs=200, batch_size=b_size)

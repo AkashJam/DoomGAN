@@ -28,9 +28,7 @@ def parse_wads(wad_ids, dataset_path):
   reader = WADReader()
   valid_dataset = list()
   maps_meta = dict()
-  for feat in ['min_height','min_width','max_height','max_width','max_rooms']:
-    if 'max' in feat: maps_meta[feat] = 0
-    else: maps_meta[feat] = 1000
+  maps_meta['max_rooms'] = 0
   for id in wad_ids:
     wad_path = dataset_path + id + "/"
     # Listing all files in directories that have wad_id as their name
@@ -41,18 +39,12 @@ def parse_wads(wad_ids, dataset_path):
           if wad_with_features is not None and not wad_with_features['wad']['exception']:
             levels = wad_with_features["levels"]
             features = levels[0]["features"]
-            if features["number_of_monsters"]>0 and features["number_of_weapons"]>0 and features["start_location_x_px"] != -1 and features["start_location_y_px"] != -1:
+            if features["has_teleporters"] and features["number_of_monsters"]>0 and features["number_of_weapons"]>0 and features["start_location_x_px"] != -1 and features["start_location_y_px"] != -1:
               # Adding extracted features with the map
               # feature_map = levels[0]["maps"]
               # feature_map.update(levels[0]["features"])
               # feature_maps.append(feature_map)
-              # plt.imshow(levels[0]["maps"]["roommap"])
-              # plt.show()
               map = levels[0]["maps"]["roommap"]
-              if map.shape[1] < maps_meta['min_width']: maps_meta['min_width'] = map.shape[1]
-              if map.shape[0] < maps_meta['min_height']: maps_meta['min_height'] = map.shape[0]
-              if map.shape[1] > maps_meta['max_width']: maps_meta['max_width'] = map.shape[1]
-              if map.shape[0] > maps_meta['max_height']: maps_meta['max_height'] = map.shape[0]
               if map.max() > maps_meta['max_rooms']: maps_meta['max_rooms'] = map.max()
               feature_maps.append(levels[0]["maps"])
               valid_dataset.append({'id':id, 'name':file})
@@ -92,14 +84,13 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   map_meta["powerups"] = {"type": "uint8", "min": obj["powerups"][0], "max": obj["powerups"][-1]}
   map_meta["artifacts"] = {"type": "uint8", "min": obj["artifacts"][0], "max": obj["artifacts"][-1]}
 
+  obj['essentials'] = ThingTypes.get_index_by_category('essentials')
+  map_meta["essentials"] = {"type": "uint8", "min": obj['essentials'][0], "max": obj['essentials'][-1]}
+
 
   map_dict = dict()
   map_dict['wads'] = {wad['id']: i for i,wad in enumerate(wad_list)}
   map_dict['count'] = len(wad_list)
-  map_dict['min_height'] = meta['min_height']
-  map_dict['min_width'] = meta['min_width']
-  map_dict['max_height'] = meta['max_height']
-  map_dict['max_width'] = meta['max_width']
   keys = map_keys + cate_pref
   key_meta = {key: map_meta[key] for key in keys}
   map_dict['maps_meta'] = key_meta
@@ -107,7 +98,7 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-  file = save_path + 'metadataset.json'
+  file = save_path + 'metadata.json'
   with open(file, 'w') as jsonfile:
     json.dump(map_dict, jsonfile)
 
@@ -126,16 +117,6 @@ def serialize_array(array):
 
 # pads the maps to show relatve scale, needs addition of image size recification to take into consideration
 def map_padding(mat, keys, cate):
-  # mat_height = mat['floormap'].shape[0]
-  # mat_width = mat['floormap'].shape[1]
-  # scale_height = math.floor(meta['max_height']/100)
-  # scale_width = math.floor(meta['max_width']/100)
-  # # Providing decreasing amount of padding for inscreasing size
-  # if mat_height/(scale_height*100) <= 1: x = (scale_height - math.floor(mat_height/100))*5 
-  # else: x = 0
-  # if mat_width/(scale_width*100) <= 1: y = (scale_width - math.floor(mat_width/100))*5 
-  # else: y = 0
-  # # padding x rows on top and bottom and y columns on left and right with constant_values is 0.
   organized_map = dict()
   for key in keys:
     if key == 'thingsmap':
@@ -149,7 +130,7 @@ def map_padding(mat, keys, cate):
 
 # Write TFrecord file
 def generate_tfrecord(maps,keys_pref,cate_pref,save_path):
-  file_name = 'dataset.tfrecords'
+  file_name = 'data.tfrecords'
   file_path = save_path + file_name
   keys = keys_pref+cate_pref
   with tf.io.TFRecordWriter(file_path) as writer:
@@ -181,5 +162,5 @@ save_path = '../dataset/parsed/doom/'
 # All the generated maps are ['thingsmap', 'floormap', 'wallmap', 'heightmap', 'triggermap', 'roommap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 
 # 'leftwalltexturemap'] with things map containing ['start','other', 'keys', 'decorations', 'obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 keys = ['floormap', 'wallmap', 'heightmap', 'triggermap', 'roommap', 'thingsmap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap','leftwalltexturemap']
-things_cate = ['start', 'other', 'keys','obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
+things_cate = ['essentials','start', 'other', 'keys','obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 doom_parser(dataset_path,keys,things_cate,save_path)
