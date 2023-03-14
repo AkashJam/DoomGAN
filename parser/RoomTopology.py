@@ -1,4 +1,4 @@
-from skimage import filters
+from skimage import filters, color, io
 from skimage.future import graph as skg
 from skimage.segmentation import watershed
 from skimage.measure import regionprops, label, find_contours
@@ -128,10 +128,10 @@ def create_graph(floormap, return_dist=False, room_coordinates=False):
                 room_boundaries = tuple(vertices_to_segment_list(rooms_vertices))
 
 
-                room_RAG_boundaries.node[room_id]['walls'] = list()
+                room_RAG_boundaries.nodes[room_id]['walls'] = list()
                 for segment in room_boundaries:
                     leads_to = 0 if segment in floor_boundaries else None # We cannot still know edges for other rooms but background
-                    room_RAG_boundaries.node[room_id]['walls'].append((segment, leads_to))
+                    room_RAG_boundaries.nodes[room_id]['walls'].append((segment, leads_to))
 
             # Here we still miss the relation between boundary and edges.
             # Second pass
@@ -139,30 +139,30 @@ def create_graph(floormap, return_dist=False, room_coordinates=False):
                 if room_id not in rooms:
                     # Some room id may be in another floor, if they are enumerated horizontally
                     continue
-                boundaries_current = {wall for wall in room_RAG_boundaries.node[room_id]['walls'] if wall[1] is None}
+                boundaries_current = {wall for wall in room_RAG_boundaries.nodes[room_id]['walls'] if wall[1] is None}
                 for neigh in room_RAG_boundaries.adj[room_id]:
                     if neigh == 0:
                         continue
                     # Finding the neighbour boundaries. We must consider both directions for each vertex
-                    boundaries_neigh = {wall for wall in room_RAG_boundaries.node[neigh]['walls'] if wall[1] is None}
-                    boundaries_neigh_reverse = {_reverse_wall(wall) for wall in room_RAG_boundaries.node[neigh]['walls'] if wall[1] is None}
+                    boundaries_neigh = {wall for wall in room_RAG_boundaries.nodes[neigh]['walls'] if wall[1] is None}
+                    boundaries_neigh_reverse = {_reverse_wall(wall) for wall in room_RAG_boundaries.nodes[neigh]['walls'] if wall[1] is None}
 
                     common_segments = boundaries_current.intersection(boundaries_neigh)
                     common_segments_reversed = boundaries_current.intersection(boundaries_neigh_reverse)
                     # Marking the boundary in the two nodes with the destination node
                     # Each node will contain the list
                     for cs in common_segments:
-                        i_current = room_RAG_boundaries.node[room_id]['walls'].index(cs)
-                        i_neighbour = room_RAG_boundaries.node[neigh]['walls'].index(cs)
-                        room_RAG_boundaries.node[room_id]['walls'][i_current] = (cs[0], neigh)
-                        room_RAG_boundaries.node[neigh]['walls'][i_neighbour] = (cs[0], room_id)
+                        i_current = room_RAG_boundaries.nodes[room_id]['walls'].index(cs)
+                        i_neighbour = room_RAG_boundaries.nodes[neigh]['walls'].index(cs)
+                        room_RAG_boundaries.nodes[room_id]['walls'][i_current] = (cs[0], neigh)
+                        room_RAG_boundaries.nodes[neigh]['walls'][i_neighbour] = (cs[0], room_id)
                     # Same thing in the case of reversed segments
                     for cs in common_segments_reversed:
                         rev_cs = _reverse_wall(cs)
-                        i_current = room_RAG_boundaries.node[room_id]['walls'].index(cs)
-                        i_neighbour = room_RAG_boundaries.node[neigh]['walls'].index(rev_cs)
-                        room_RAG_boundaries.node[room_id]['walls'][i_current] = (cs[0], neigh)
-                        room_RAG_boundaries.node[neigh]['walls'][i_neighbour] = (rev_cs[0], room_id)
+                        i_current = room_RAG_boundaries.nodes[room_id]['walls'].index(cs)
+                        i_neighbour = room_RAG_boundaries.nodes[neigh]['walls'].index(rev_cs)
+                        room_RAG_boundaries.nodes[room_id]['walls'][i_current] = (cs[0], neigh)
+                        room_RAG_boundaries.nodes[neigh]['walls'][i_neighbour] = (rev_cs[0], room_id)
     if return_dist:
         return roommap, room_RAG_boundaries, dist
     return roommap, room_RAG_boundaries

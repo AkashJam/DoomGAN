@@ -10,8 +10,7 @@ def downsample(filters, size, stride, apply_batchnorm=True):
   initializer = tf.random_normal_initializer(0., 0.02)
   result = tf.keras.Sequential()
   result.add(
-      tf.keras.layers.Conv2D(filters, size, strides=stride, padding='same',
-                             kernel_initializer=initializer, use_bias=False))
+      tf.keras.layers.Conv2D(filters, size, strides=stride, padding='same', kernel_initializer=initializer, use_bias=False))
   if apply_batchnorm:
     result.add(tf.keras.layers.BatchNormalization())
   result.add(tf.keras.layers.ReLU())
@@ -21,10 +20,7 @@ def upsample(filters, size, stride, apply_dropout=False):
   initializer = tf.random_normal_initializer(0., 0.02)
   result = tf.keras.Sequential()
   result.add(
-    tf.keras.layers.Conv2DTranspose(filters, size, strides=stride,
-                                    padding='same',
-                                    kernel_initializer=initializer,
-                                    use_bias=False))
+    tf.keras.layers.Conv2DTranspose(filters, size, strides=stride, padding='same', kernel_initializer=initializer, use_bias=False))
   result.add(tf.keras.layers.BatchNormalization())
   if apply_dropout:
       result.add(tf.keras.layers.Dropout(0.5))
@@ -34,6 +30,7 @@ def upsample(filters, size, stride, apply_dropout=False):
 
 def Generator():
   inputs = tf.keras.layers.Input(shape=[256, 256, 3])
+  noise = tf.keras.layers.Input(shape=[256, 256, 1])
 
   down_stack = [
     downsample(128, (8,8), (4,4), apply_batchnorm=False),  # (batch_size, 64, 64, 64)
@@ -55,13 +52,9 @@ def Generator():
   ]
 
   initializer = tf.random_normal_initializer(0., 0.02)
-  last = tf.keras.layers.Conv2DTranspose(1, (8,8),
-                                         strides=(4,4),
-                                         padding='same',
-                                         kernel_initializer=initializer,
-                                         activation='relu')  # (batch_size, 128, 128, 1)
+  last = tf.keras.layers.Conv2DTranspose(1, (8,8), strides=(4,4), padding='same', kernel_initializer=initializer, activation='relu')  # (batch_size, 128, 128, 1)
 
-  x = inputs
+  x = tf.keras.layers.concatenate([inputs, noise])
 
   # Downsampling through the model
   skips = []
@@ -79,49 +72,52 @@ def Generator():
 
   x = last(x)
   # x = tfmot.sparsity.keras.prune_low_magnitude(last,pruning_schedule=tfmot.sparsity.keras.ConstantSparsity(0.99, 1,-1, 100))(x)
-
-  return tf.keras.Model(inputs=inputs, outputs=x)
-
-generator = Generator()
-# generator = tfmot.sparsity.keras.prune_low_magnitude(Generator(),pruning_schedule=tfmot.sparsity.keras.ConstantSparsity(0.99, 0,-1, 100))
+  return tf.keras.Model(inputs=[inputs,noise], outputs=x)
 
 loss_object = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
-def generator_loss(disc_generated_output, gen_output, target, input_imgs, LAMBDA = 100):
+def generator_loss(disc_generated_output, gen_output, target, input_imgs, LAMBDA = 1000):
   gan_loss = loss_object(tf.ones_like(disc_generated_output), disc_generated_output)
-
-  # UNet - mask loss + Abs Mean error (no. of objs) + Categorical distribution of objs (1/n start + 10% guns + 40% ammo + 50% monsters)
-
-
 
   # Take floormap scaled to 0 or 1, invert the image and use it as a mask for the generated images 
   # to pick up objects generated outside the level bounds and add that to the loss
-  loss = list()
-  for i in range(gen_output.shape[0]):
-    id = input_params.index('floormap')
-    mask = (input_imgs[i,:,:,id]<1).astype(tf.float32)
-    for j in range(gen_output.shape[3]):
-      # obj_map = (gen_output[i,:,:,j]>0).astype(tf.uint8)
-      loss.append(tf.reduce_sum(tf.multiply(mask,gen_output[i,:,:,j]))/tf.reduce_sum(mask))
-  l2_loss = sum(loss)/len(loss)
-
-  # l2_loss = math.ceil(l2_loss*100)/100
+  id = input_params.index('floormap')
+  floor_bool_mask = tf.cast(input_imgs[:,:,:,id],tf.bool)
+  not_floor_mask = tf.cast(tf.logical_not(floor_bool_mask),tf.float32)
+  # floor_mask = tf.cast(floor_bool_mask,tf.float32)
+  not_floor_mask = tf.reshape(not_floor_mask,[input_imgs.shape[0],input_imgs.shape[1],input_imgs.shape[2],1])
+  # floor_mask = tf.reshape(not_floor_mask,[input_imgs.shape[0],input_imgs.shape[1],input_imgs.shape[2],1])
+  # # Create as many masks as the are generated object maps
+  # if (gen_output.shape[3] != 1):
+  #   not_floor_mask = tf.tile(not_floor_mask,[1,1,1,gen_output.shape[3]])
+  #   floor_mask = tf.tile(floor_mask,[1,1,1,gen_output.shape[3]])
+  mask_loss = tf.reduce_mean(not_floor_mask*gen_output)
+  # loss = list()
+  # for i in range(gen_output.shape[0]):
+  #   mask = (input_imgs[i,:,:,id]<1).astype(tf.float32)
+  #   for j in range(gen_output.shape[3]):
+  #     # obj_map = (gen_output[i,:,:,j]>0).astype(tf.uint8)
+  #     loss.append(tf.reduce_sum(tf.multiply(mask,gen_output[i,:,:,j]))/tf.reduce_sum(mask))
+  # l2_loss = sum(loss)/len(loss)
 
   # Mean absolute error
   # l1_loss = tf.reduce_mean(tf.abs(target - gen_output))
-  l1_loss = tf.abs(tf.reduce_mean(target - gen_output))
-  l_loss = l1_loss + l2_loss
-  # total_gen_loss = gan_loss + LAMBDA * (l1_loss + (LAMBDA * l2_loss))
-  total_gen_loss = gan_loss/(1 - (l1_loss + l2_loss)/2)
+  target_mask = tf.cast(tf.cast(target,tf.bool),tf.float32)
+  gen_mask = tf.cast(tf.cast(gen_output,tf.bool),tf.float32)
+  obj_loss = tf.abs(tf.reduce_mean(target_mask - gen_mask)*tf.reduce_mean(target - gen_output))
+  l_loss =  mask_loss + obj_loss * LAMBDA
+  # if l_loss > 1.75: 
+  #   l_loss = 1.5
+
+  total_gen_loss = gan_loss + l_loss * LAMBDA
+  # total_gen_loss = gan_loss/(1 - (l_loss)/2)
 
   return total_gen_loss, gan_loss, l_loss
 
 def Discriminator():
   initializer = tf.random_normal_initializer(0., 0.02)
-
   inp = tf.keras.layers.Input(shape=[256, 256, 3], name='input_image')
   tar = tf.keras.layers.Input(shape=[256, 256, 1], name='target_image')
-
   x = tf.keras.layers.concatenate([inp, tar])  # (batch_size, 256, 256, 8)
 
   down1 = downsample(128, (8,8), (4,4), False)(x)  # (batch_size, 64, 64, 128)
@@ -129,61 +125,49 @@ def Discriminator():
   down3 = downsample(512, (8,8), (4,4))(down2)  # (batch_size, 4, 4, 512)
 
   zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3)  # (batch_size, 6, 6, 512)
-  conv = tf.keras.layers.Conv2D(1024, (4,4), strides=(1,1),
-                                kernel_initializer=initializer,
-                                use_bias=False)(zero_pad1)  # (batch_size, 3, 3, 1024)
+  conv = tf.keras.layers.Conv2D(1024, (4,4), strides=(1,1), kernel_initializer=initializer, use_bias=False)(zero_pad1)  # (batch_size, 3, 3, 1024)
 
   batchnorm1 = tf.keras.layers.BatchNormalization()(conv)
-
   leaky_relu = tf.keras.layers.LeakyReLU()(batchnorm1)
-
   zero_pad2 = tf.keras.layers.ZeroPadding2D()(leaky_relu)  # (batch_size, 4, 4, 1024)
-
-  last = tf.keras.layers.Conv2D(1, 4, strides=1,
-                                kernel_initializer=initializer)(zero_pad2)  # (batch_size, 1, 1, 1)
+  last = tf.keras.layers.Conv2D(1, 4, strides=1, kernel_initializer=initializer)(zero_pad2)  # (batch_size, 1, 1, 1)
 
   return tf.keras.Model(inputs=[inp, tar], outputs=last)
 
 
-discriminator = Discriminator()
-
 def discriminator_loss(disc_real_output, disc_generated_output):
   real_loss = loss_object(tf.ones_like(disc_real_output), disc_real_output)
-
   generated_loss = loss_object(tf.zeros_like(disc_generated_output), disc_generated_output)
-
   total_disc_loss = real_loss + generated_loss
-
   return total_disc_loss
 
-generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
-discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
-def generate_images(model, test_input, tar, epoch):
-  prediction = model(test_input, training=False)
-  plt.figure(figsize=(20, 8))
+def generate_images(model, test_input, seed, epoch):
+  prediction = model([test_input, seed], training=False)
+  plt.figure(figsize=(16, 8))
+  display_list = [test_input[0,:,:,0], prediction[0,:,:,0], prediction[0,:,:,1], prediction[0,:,:,2]]
+  title = ['Floor Map', 'Monsters', 'Ammunitions', 'Weapons']
 
-  display_list = [test_input[0,:,:,0],tar[0,:,:,0], prediction[0,:,:,0]]
-  title = ['Floor Map', 'Ground Truth - essentials', 'Predicted Image - essentials']
-
-  for i in range(3):
-    plt.subplot(1, 3, i+1)
+  for i in range(4):
+    plt.subplot(2, 2, i+1)
     plt.title(title[i])
-    # Getting the pixel values in the [0, 1] range to plot.
-    plt.imshow(display_list[i])
+    plt.imshow(display_list[i] * 127.5 + 127.5, cmap='gray')
     plt.axis('off')
   plt.savefig('generated_maps/things_map/image_at_epoch_{:04d}.png'.format(epoch))
   plt.close()
-#   plt.show()
 
+  
 def train_step(input_image, target):
+  batch_size = tf.shape(input_image)[0]
+  noise_vectors = tf.random.normal(shape=(batch_size, tf.shape(input_image)[1], tf.shape(input_image)[2], 1))
   with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
-    gen_output = generator(input_image, training=True)
+    # gen_output = generator(input_image, training=True)
+    gen_output = generator([input_image, noise_vectors], training=True)
 
     disc_real_output = discriminator([input_image, target], training=True)
     disc_generated_output = discriminator([input_image, gen_output], training=True)
 
-    gen_total_loss, gen_gan_loss, gen_l1_loss, gen_l2_loss = generator_loss(disc_generated_output, gen_output, target, input_image)
+    gen_total_loss, gen_gan_loss, gen_l_loss = generator_loss(disc_generated_output, gen_output, target, input_image)
     disc_loss = discriminator_loss(disc_real_output, disc_generated_output)
 
   generator_gradients = gen_tape.gradient(gen_total_loss,
@@ -196,24 +180,16 @@ def train_step(input_image, target):
   discriminator_optimizer.apply_gradients(zip(discriminator_gradients,
                                               discriminator.trainable_variables))
   
-  return {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss), "gan_loss": tf.abs(gen_gan_loss), "l1_loss": tf.abs(gen_l1_loss), "l2_loss": tf.abs(gen_l2_loss)}
+  return {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss), "gan_loss": tf.abs(gen_gan_loss), "l_loss": tf.abs(gen_l_loss)}
 
-# step_callback = tfmot.sparsity.keras.UpdatePruningStep()
-# step_callback.set_model(generator)
 
-def train(dataset, map_meta, sample, inp_param, opt_param, epochs, batch_size=32):
+def train(dataset, map_meta, sample, inp_param, opt_param, epochs):
   start = time.time()
   disc_ts_loss = list()
   gen_ts_loss = list()
-  gan_ts_loss = list()
-  l_ts_loss = list()
   sample_input = np.stack([sample[m] for m in inp_param], axis=-1).reshape((1, 256, 256, len(inp_param)))
-  if len(opt_param) == 1:
-    sample_target = np.stack(sample[opt_param[0]]).reshape((1, 256, 256, 1))
-  else:
-    sample_target = np.stack([sample[m] for m in opt_param], axis=-1).reshape((1, 256, 256, len(opt_param)))
   scaled_sample_input = scaling_maps(sample_input, map_meta, inp_param)
-  scaled_sample_target = scaling_maps(sample_target, map_meta, opt_param)
+  seed = tf.random.normal([1, tf.shape(sample_input)[1], tf.shape(sample_input)[2], 1])
   # step_callback.on_train_begin()
   for epoch in range(epochs):
     n = 0
@@ -221,7 +197,7 @@ def train(dataset, map_meta, sample, inp_param, opt_param, epochs, batch_size=32
     for image_batch in dataset:
       input = np.stack([image_batch[m] for m in inp_param], axis=-1)
       if len(opt_param) == 1:
-        target = np.stack(image_batch[opt_param[0]]).reshape((batch_size, 256, 256, 1))
+        target = np.stack(image_batch[opt_param[0]]).reshape((tf.shape(input)[0], 256, 256, 1))
       else:
         target = np.stack([image_batch[m] for m in opt_param], axis=-1)
       scaled_input = scaling_maps(input, map_meta, inp_param)
@@ -238,31 +214,39 @@ def train(dataset, map_meta, sample, inp_param, opt_param, epochs, batch_size=32
           step_loss = train_step(x_input, x_target)
           disc_ts_loss.append(step_loss['d_loss'])
           gen_ts_loss.append(step_loss['g_loss'])  
-          gan_ts_loss.append(step_loss['gan_loss'])  
-          l_ts_loss.append(step_loss['l_loss'])  
           print ('Time for batch {} is {} sec'.format(n, time.time()-start))
-    generate_images(generator, scaled_sample_input, scaled_sample_target, epoch+1)
-    generate_loss_graph(disc_ts_loss, gen_ts_loss, gan_ts_loss, l_ts_loss,'generated_maps/things_map/convergence_graph.png')
+    generate_images(generator, scaled_sample_input, seed, epoch+1)
 
     # step_callback.on_epoch_end(batch=epoch+1)
 
     if (epoch + 1) % 10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
+      generate_loss_graph(disc_ts_loss, gen_ts_loss,'generated_maps/things_map/convergence_graph.png')
 
     print ('Time for epoch {} is {} sec'.format(epoch+1, time.time()-start))
 
-checkpoint_dir = './training_checkpoints/pix2pix'
-checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
-                                 discriminator_optimizer=discriminator_optimizer,
-                                 generator=generator,
-                                 discriminator=discriminator)
+if __name__ == "__main__":
+  batch_size = 16
+  training_set, map_meta, sample = read_record(batch_size)
+  generator = Generator()
+  # For pruning the Generator
+  # generator = tfmot.sparsity.keras.prune_low_magnitude(Generator(),pruning_schedule=tfmot.sparsity.keras.ConstantSparsity(0.99, 0,-1, 100))
+  # step_callback = tfmot.sparsity.keras.UpdatePruningStep()
+  # step_callback.set_model(generator)
+  discriminator = Discriminator()
+  generator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
+  discriminator_optimizer = tf.keras.optimizers.Adam(2e-4, beta_1=0.5)
 
-# if os.path.exists(checkpoint_dir):                            
-#     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+  checkpoint_dir = './training_checkpoints/pix2pix'
+  checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+  checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
+                                  discriminator_optimizer=discriminator_optimizer,
+                                  generator=generator,
+                                  discriminator=discriminator)
 
-b_size = 16
-input_params = ['floormap', 'wallmap','heightmap']
-output_params = ['essentials']
-training_set, map_meta, sample = read_record(batch_size=b_size)
-# train(training_set, map_meta, sample, input_params, output_params, epochs=200, batch_size=b_size)
+  # if os.path.exists(checkpoint_dir):                            
+  #     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+
+  input_params = ['floormap', 'wallmap', 'heightmap']
+  output_params = ['essentials']
+  train(training_set, map_meta, sample, input_params, output_params, epochs=200)

@@ -325,7 +325,7 @@ class WADWriter(object):
             # Creating a spanning tree for each floor
             F = H.subgraph(floor_rooms)
             T = nx.minimum_spanning_tree(F)
-            degree = T.degree()
+            degree = dict(T.degree())
             # Entry point has minimum node degree
             floor_entry = min(degree, key=degree.get)
             # Finding all paths in the level to determine the best exit (longest path)
@@ -351,41 +351,41 @@ class WADWriter(object):
                             if height > path[rid-1] + 24:
                                 height = path[rid-1] + 24
                         corrected_heights[room] = int(height)
-        nx.set_node_attributes(G, "height", corrected_heights)
+        nx.set_node_attributes(G, corrected_heights, "height")
 
         for id, floor_path in enumerate(level_solution):
             if id == 0:
                 # Place the level start
-                start_x, start_y = G.node[floor_path[0]]["centroid"]
-                nx.set_node_attributes(G, "level_start", {floor_path[0]: {"location": (start_x, start_y)}})
+                start_x, start_y = G.nodes[floor_path[0]]["centroid"]
+                nx.set_node_attributes(G, {floor_path[0]: {"location": (start_x, start_y)}}, "level_start")
             else:
                 # place a teleport source
                 possible_places = np.stack(np.where(roommap==floor_path[0]), axis=1)
                 random_pixel_index = np.random.choice(possible_places.shape[0])
                 x, y = possible_places[random_pixel_index]
 
-                nx.set_node_attributes(G, "floor_start", {floor_path[0]: {"location": (x, y)}})
+                nx.set_node_attributes(G, {floor_path[0]: {"location": (x, y)}}, "floor_start")
             if id == len(level_solution)-1:
                 # This is the last floor to visit, place the level exit
                 possible_places = np.stack(np.where(roommap == floor_path[0]), axis=1)
                 random_pixel_index = np.random.choice(possible_places.shape[0])
                 x, y = possible_places[random_pixel_index]
-                nx.set_node_attributes(G, "level_exit", {floor_path[-1]: {"location": (x, y)}})
+                nx.set_node_attributes(G, {floor_path[-1]: {"location": (x, y)}}, "level_exit")
             else:
                 # There's another unvisited floor, place a teleporter to the next floor
                 possible_places = np.stack(np.where(roommap==floor_path[-1]), axis=1)
                 random_pixel_index = np.random.choice(possible_places.shape[0])
                 x, y = possible_places[random_pixel_index]
 
-                nx.set_node_attributes(G, "floor_exit", {floor_path[-1]: {"destination":level_solution[id+1][0], "location": (x, y)}})
+                nx.set_node_attributes(G, {floor_path[-1]: {"destination":level_solution[id+1][0], "location": (x, y)}}, "floor_exit")
 
         level_objects = {}
         # Scanning the room for objects
         for room in H.nodes():
             things_in_room = (roommap == room)*thingsmap
             things_pixels_indices = np.delete(np.unique(things_in_room), 0)
-            # Converting thing pixels to doom types
-            things_types = [get_type_id_from_index(i) for i in things_pixels_indices]
+            # Converting thing pixels to doom types, need to search from essentials
+            things_types = [get_type_id_from_index(i, essential=True) for i in things_pixels_indices]
             categories = [get_category_from_type_id(t) for t in things_types]
 
             things_dict = {}
@@ -403,7 +403,7 @@ class WADWriter(object):
                         things_dict[thing_cat][thing_type].append((x, y))
             level_objects[room] = things_dict
 
-        nx.set_node_attributes(G, "things", level_objects)
+        nx.set_node_attributes(G, level_objects, "things")
 
         return G
 
@@ -423,13 +423,13 @@ class WADWriter(object):
             # Create a sector
             node_attr_sectors[n] = self.lumps['SECTORS'].add_sector(floor_height=int(heights[n]), ceiling_height=128+int(max(heights.values())), floor_flat='FLOOR0_1', ceiling_flat='FLOOR4_1', lightlevel=255,
                                                          special_sector=0, tag=int(n))
-        nx.set_node_attributes(graph, 'sector_id', node_attr_sectors)
+        nx.set_node_attributes(graph, node_attr_sectors, 'sector_id')
 
         # Creating two sidedefs for each edge and the corresponding linedef
         for i, j in graph.edges():
             if i == 0:
                 # linedef flag is impassable and the right sidedef is j
-                j_walls = graph.node[j]["walls"]
+                j_walls = graph.nodes[j]["walls"]
                 walls = [w for w in j_walls if w[1] == i or w[1] is None] # Check this if there's any problem in the corners
                 for wall_piece in walls:
                     start = self.lumps['VERTEXES'].add_vertex(self._rescale_coords(wall_piece[0][0]))
@@ -439,7 +439,7 @@ class WADWriter(object):
                                                                       upper_texture='BRONZE1',
                                                                       lower_texture='BRONZE1',
                                                                       middle_texture='BRONZE1',
-                                                                      sector=graph.node[j]["sector_id"])
+                                                                      sector=graph.nodes[j]["sector_id"])
                     # - Make a linedef
                     linedef = self.lumps['LINEDEFS'].add_linedef(start, end, flags=linedef_flags_to_int(impassable=True), types=0,
                                                trigger=0, right_sidedef_index=right_sidedef)
@@ -448,7 +448,7 @@ class WADWriter(object):
                         edge_attr_sidedef[(i,j)] = list()
                     edge_attr_sidedef[(i, j)].append(right_sidedef)
             else:
-                i_walls = graph.node[i]["walls"]
+                i_walls = graph.nodes[i]["walls"]
                 # linedef is invisible
                 # Get the boundaries from i to j
                 walls_ij = [w for w in i_walls if w[1] == j]
@@ -460,13 +460,13 @@ class WADWriter(object):
                                                                       upper_texture='BRONZE1',
                                                                       lower_texture='BRONZE1',
                                                                       middle_texture='-',
-                                                                      sector=graph.node[i]["sector_id"])
+                                                                      sector=graph.nodes[i]["sector_id"])
                     # - Left sidedef is j (in j list there's the reversed linedef)
                     left_sidedef = self.lumps['SIDEDEFS'].add_sidedef(x_offset=0, y_offset=0,
                                                                       upper_texture='BRONZE1',
                                                                       lower_texture='BRONZE1',
                                                                       middle_texture='-',
-                                                                      sector=graph.node[j]["sector_id"])
+                                                                      sector=graph.nodes[j]["sector_id"])
                     # - Make a linedef
                     linedef = self.lumps['LINEDEFS'].add_linedef(start, end, flags=linedef_flags_to_int(twosided=True), types=0,
                                                trigger=0, right_sidedef_index=right_sidedef,
@@ -477,7 +477,7 @@ class WADWriter(object):
                     edge_attr_sidedef[(i, j)].append(right_sidedef)
                     edge_attr_sidedef[(i, j)].append(left_sidedef)
             # Actually update edge attribnutes
-            nx.set_edge_attributes(graph, 'sidedef', edge_attr_sidedef)
+            nx.set_edge_attributes(graph, edge_attr_sidedef, 'sidedef')
 
         if place_enemies:
             # THINGS PLACEMENT
@@ -487,8 +487,8 @@ class WADWriter(object):
                     for thingtype, coordlist in thinglist.items():
                         for coord in coordlist:
                             # THIS IS A FIX FOR AVOIDING TOO MANY BOSSES IN THE LEVEL
-                            if cat == "monsters":
-                                thingtype = self._get_random_enemy()
+                            # if cat == "monsters":
+                            #     thingtype = self._get_random_enemy()
 
                             x, y = self._rescale_coords(coord)
                             self.add_thing(x, y, thingtype)
@@ -508,7 +508,7 @@ class WADWriter(object):
             print("Setting teleport source at {},{}".format(x, y))
         for n, l_exit in nx.get_node_attributes(graph, "level_exit").items():
             x, y = self._rescale_coords(l_exit["location"])
-            self.add_level_exit(x, y, inside=int(n), floor_height=int(graph.node[n]["height"])-16, ceiling_height=128+int(graph.node[n]["height"])-16)
+            self.add_level_exit(x, y, inside=int(n), floor_height=int(graph.nodes[n]["height"])-16, ceiling_height=128+int(graph.nodes[n]["height"])-16)
 
     def add_teleporter_destination(self, x, y):
         self.add_thing(x, y, thing_type=14)
@@ -536,7 +536,8 @@ class WADWriter(object):
         self.lumps['THINGS'].add_thing(int(x), int(y), angle=0, type=1, options=0)
 
     def add_thing(self, x,y, thing_type, options=7, angle=0):
-        self.lumps['THINGS'].add_thing(int(x), int(y), angle=angle, type=int(thing_type), options=options)
+        if thing_type != None:
+            self.lumps['THINGS'].add_thing(int(x), int(y), angle=angle, type=int(thing_type), options=options)
 
     def add_door(self,vertices_coords, parent_sector, tag=None, remote=False, texture='DOORTRAK'):
         """

@@ -32,8 +32,8 @@ class WADFeatureExtractor(object):
             x = np.floor(((x_centered+pad_x) * (size[0]-1)) / (x_max+pad_x*2)).astype(np.int32)
             y = np.floor(((y_centered+pad_y) * (size[1]-1)) / (y_max+pad_y*2)).astype(np.int32)
         else:
-            x = np.floor((x_centered * size) / x_max).astype(np.int32)
-            y = np.floor((y_centered * size) / y_max).astype(np.int32)
+            x = np.floor((x_centered * size[0]-1) / x_max).astype(np.int32)
+            y = np.floor((y_centered * size[1]-1) / y_max).astype(np.int32)
         # x = np.floor(x_centered / factor).astype(np.int32)
         # y = np.floor(y_centered / factor).astype(np.int32)
         return x, y
@@ -167,8 +167,7 @@ class WADFeatureExtractor(object):
             tx, ty = self._rescale_coord(thing['x'], thing['y'], wad_features)
             if category in cate:
                 thingsmap[category][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'])
-            if thingsmap['essentials'][tx, ty] not in ThingTypes.get_index_by_category('start'):
-                thingsmap['essentials'][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'],essential = True)
+            thingsmap['essentials'][tx,ty] = ThingTypes.get_index_from_type_id(thing['type'],essential = True)
             if thingsmap['thingsmap'][tx, ty] in ThingTypes.get_index_by_category('start'):
                 # Avoid overwriting of player start location if something else is placed there (like a teleporter)
                 continue

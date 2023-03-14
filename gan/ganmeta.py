@@ -30,9 +30,15 @@ def read_record(batch_size=32, save_path='../dataset/parsed/doom/'):
 
 # Read TF Records and View the scaled maps
 def parse_tfrecord(record,meta):
-    dataset = list()
+    # If adding the wgan generated maps as the sample
+    # save_path = '../dataset/generated/doom/'
+    # file_path = save_path + 'sample.tfrecords'
+    # if not os.path.isfile(file_path):
+    #     print('No dataset record found')
+    #     sys.exit()
+    # record = tf.data.TFRecordDataset(file_path)
+    # map_keys = ['floormap','wallmap','heightmap']
     map_keys = list(meta['maps_meta'].keys())
-    map_size = [256,256]
     parse_dic = {
         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
         }
@@ -47,20 +53,6 @@ def parse_tfrecord(record,meta):
                 b_feature = example_message[key] # get byte string
                 feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
                 features[key] = feature
-            # plt.figure(figsize=(8, 8))
-            # plt.subplot(2, 2, 1)
-            # plt.imshow(features['floormap']* 127.5 + 127.5, cmap='gray')
-            # plt.axis('off')
-            # plt.subplot(2, 2, 2)
-            # plt.imshow(features['wallmap']* 127.5 + 127.5, cmap='gray')
-            # plt.axis('off')
-            # plt.subplot(2, 2, 3)
-            # plt.imshow(features['essentials']* 127.5 + 127.5, cmap='gray')
-            # plt.axis('off')
-            # plt.subplot(2, 2, 4)
-            # plt.imshow(features['heightmap']* 127.5 + 127.5, cmap='gray')
-            # plt.axis('off')
-            # plt.show()
             break
     return features
 
@@ -81,22 +73,6 @@ def _parse_tfr_element(element):
     return features
 
 
-def generate_and_save_images(model, epoch, test_input):
-  # Notice `training` is set to False.
-  # This is so all layers run in inference mode (batchnorm).
-  predictions = model(test_input, training=False)
-
-  plt.figure(figsize=(8, 8))
-  for i in range(4):
-    plt.subplot(2, 2, i+1)
-    plt.imshow(predictions[0, :, :, i])
-    # plt.imshow(predictions[0, :, :, i] * 127.5 + 127.5, cmap='gray') 
-    plt.axis('off')
-
-  plt.savefig('generated_maps/image_at_epoch_{:04d}.png'.format(epoch))
-  plt.close()
-
-
 def scaling_maps(x, map_meta, map_names, use_sigmoid=True):
     """
     Compute the scaling of eve ry map based on their .meta statistics (max and min)
@@ -110,8 +86,8 @@ def scaling_maps(x, map_meta, map_names, use_sigmoid=True):
     b = 1
     max = tf.constant([map_meta[m]['max'] for m in map_names], dtype=tf.float32) * tf.ones(tf.convert_to_tensor(x).get_shape())
     min = tf.constant([map_meta[m]['min'] for m in map_names], dtype=tf.float32) * tf.ones(tf.convert_to_tensor(x).get_shape())
-
-    return a + ((x-min)*(b-a))/(max-min)
+    min_mat = tf.constant([map_meta[m]['min'] for m in map_names], dtype=tf.float32) * tf.cast(tf.cast(x,tf.bool),tf.float32)
+    return a + ((x-min_mat)*(b-a))/(max-min)
 
 
 def generate_loss_graph(d_loss,g_loss,location = 'generated_maps/convergence_graph.png'):
@@ -124,3 +100,33 @@ def generate_loss_graph(d_loss,g_loss,location = 'generated_maps/convergence_gra
     plt.legend() # must be after labels
     plt.savefig(location)
     plt.close()
+
+def _bytes_feature(value):
+    """Returns a bytes_list from a string / byte."""
+    if isinstance(value, type(tf.constant(0))): # if value ist tensor
+        value = value.numpy() # get value of tensor
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
+
+# Created as it is unable to do it inline 
+def serialize_array(array):
+  array = tf.io.serialize_tensor(array)
+  return array
+
+def generate_sample(imgs,keys,test = False):
+    if test:
+        file_name = 'test.tfrecords'
+    else:
+        file_name = 'sample.tfrecords'
+    save_path = '../dataset/generated/doom/'
+    file_path = save_path + file_name
+    with tf.io.TFRecordWriter(file_path) as writer:
+        gen_maps = dict()
+        for i in range(len(keys)):
+            gen_maps[keys[i]] = imgs[0, :, :, i]
+        serialized_array = {key: serialize_array(gen_maps[key]) for key in keys}
+        feature = {key: _bytes_feature(serialized_array[key]) for key in keys}
+        example_message = tf.train.Example(features=tf.train.Features(feature=feature))
+        writer.write(example_message.SerializeToString())
+    file = save_path + 'meta.json'
+    with open(file, 'w') as jsonfile:
+        json.dump({'keys':keys}, jsonfile)

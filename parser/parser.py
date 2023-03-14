@@ -58,16 +58,16 @@ def parse_wads(wad_ids, dataset_path):
 def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
 
   map_meta = dict()
-  map_meta["floormap"] = {"type": "uint8", "min": 0.0, "max": 255.0}
-  map_meta["wallmap"] = {"type": "uint8", "min": 0.0, "max": 255.0}
-  map_meta["heightmap"] = {"type": "uint8", "min": 0.0, "max": 255.0} 
-  map_meta["triggermap"] = {"type": "uint8", "min": 0.0, "max": 255.0}
-  map_meta["roommap"] = {"type": "uint8", "min": 0.0, "max": int(meta['max_rooms'])}
-  map_meta["floortexturemap"] = {"type": "uint8", "min": 0.0, "max": graphics_meta["flats"]}
-  map_meta["ceilingtexturemap"] =  {"type": "uint8", "min": 0.0, "max": graphics_meta["flats"]}
-  map_meta["rightwalltexturemap"] = {"type": "uint8", "min": 0.0, "max": graphics_meta["textures"]}
-  map_meta["leftwalltexturemap"] = {"type": "uint8", "min": 0.0, "max": graphics_meta["textures"]}
-  map_meta["thingsmap"] = {"type": "uint8", "min": 0.0, "max": 123.0}
+  map_meta["floormap"] = {"type": "uint8", "min": 0, "max": 255}
+  map_meta["wallmap"] = {"type": "uint8", "min": 0, "max": 255}
+  map_meta["heightmap"] = {"type": "uint8", "min": 0, "max": 255} 
+  map_meta["triggermap"] = {"type": "uint8", "min": 0, "max": 255}
+  map_meta["roommap"] = {"type": "uint8", "min": 0, "max": int(meta['max_rooms'])}
+  map_meta["floortexturemap"] = {"type": "uint8", "min": 0, "max": graphics_meta["flats"]}
+  map_meta["ceilingtexturemap"] =  {"type": "uint8", "min": 0, "max": graphics_meta["flats"]}
+  map_meta["rightwalltexturemap"] = {"type": "uint8", "min": 0, "max": graphics_meta["textures"]}
+  map_meta["leftwalltexturemap"] = {"type": "uint8", "min": 0, "max": graphics_meta["textures"]}
+  map_meta["thingsmap"] = {"type": "uint8", "min": 0, "max": 123}
 
   obj = dict()
   cate = ThingTypes.get_all_categories()
@@ -85,7 +85,7 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   map_meta["artifacts"] = {"type": "uint8", "min": obj["artifacts"][0], "max": obj["artifacts"][-1]}
 
   obj['essentials'] = ThingTypes.get_index_by_category('essentials')
-  map_meta["essentials"] = {"type": "uint8", "min": obj['essentials'][0], "max": obj['essentials'][-1]}
+  map_meta["essentials"] = {"type": "uint8", "min": 0, "max": obj['essentials'][-1]}
 
 
   map_dict = dict()

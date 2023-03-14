@@ -23,24 +23,24 @@ things['powerups'] = [
 ]
 
 things['weapons'] = [
-    {'int':2006, 	'hex':'7D6', 	'version':'R', 	'radius':20, 	'sprite':'BFUG', 	'sequence':'A', 	'class':'WP', 	'description':'BFG 9000'},
-    {'int':2002, 	'hex':'7D2', 	'version':'S', 	'radius':20, 	'sprite':'MGUN', 	'sequence':'A', 	'class':'WP', 	'description':'Chaingun'},
     {'int':2005, 	'hex':'7D5', 	'version':'S', 	'radius':20, 	'sprite':'CSAW', 	'sequence':'A', 	'class':'WP', 	'description':'Chainsaw'},
-    {'int':2004, 	'hex':'7D4', 	'version':'R', 	'radius':20, 	'sprite':'PLAS', 	'sequence':'A', 	'class':'WP', 	'description':'Plasma rifle'},
-    {'int':2003, 	'hex':'7D3', 	'version':'S', 	'radius':20, 	'sprite':'LAUN', 	'sequence':'A', 	'class':'WP', 	'description':'Rocket launcher'},
     {'int':2001, 	'hex':'7D1', 	'version':'S', 	'radius':20, 	'sprite':'SHOT', 	'sequence':'A', 	'class':'WP', 	'description':'Shotgun'},
-    {'int':82,      'hex':'52',     'version':'2', 	'radius':20, 	'sprite':'SGN2', 	'sequence':'A', 	'class':'WP', 	'description':'Super shotgun'}
+    {'int':2002, 	'hex':'7D2', 	'version':'S', 	'radius':20, 	'sprite':'MGUN', 	'sequence':'A', 	'class':'WP', 	'description':'Chaingun'},
+    {'int':82,      'hex':'52',     'version':'2', 	'radius':20, 	'sprite':'SGN2', 	'sequence':'A', 	'class':'WP', 	'description':'Super shotgun'},
+    {'int':2003, 	'hex':'7D3', 	'version':'S', 	'radius':20, 	'sprite':'LAUN', 	'sequence':'A', 	'class':'WP', 	'description':'Rocket launcher'},
+    {'int':2004, 	'hex':'7D4', 	'version':'R', 	'radius':20, 	'sprite':'PLAS', 	'sequence':'A', 	'class':'WP', 	'description':'Plasma rifle'},
+    {'int':2006, 	'hex':'7D6', 	'version':'R', 	'radius':20, 	'sprite':'BFUG', 	'sequence':'A', 	'class':'WP', 	'description':'BFG 9000'},
 ]
 
 things['ammunitions'] = [
+    {'int':2008,   	'hex':'7D8',  	'version':'S',    	'radius':20, 	'sprite':'SHEL', 	'sequence':'A',    	'class':'P',   	'description':'Shotgun shells'},
     {'int':2007,   	'hex':'7D7',  	'version':'S',    	'radius':20, 	'sprite':'CLIP', 	'sequence':'A',    	'class':'P',   	'description':'Ammo clip'},
+    {'int':2010,   	'hex':'7DA',  	'version':'S',    	'radius':20, 	'sprite':'ROCK', 	'sequence':'A',    	'class':'P',   	'description':'Rocket'},
+    {'int':2047,   	'hex':'7FF',  	'version':'R',    	'radius':20, 	'sprite':'CELL', 	'sequence':'A',    	'class':'P',   	'description':'Cell charge'},
+    {'int':2049,   	'hex':'801',  	'version':'S',    	'radius':20, 	'sprite':'SBOX', 	'sequence':'A',    	'class':'P',   	'description':'Box of shells'},
     {'int':2048,   	'hex':'800',  	'version':'S',    	'radius':20, 	'sprite':'AMMO', 	'sequence':'A',    	'class':'P',   	'description':'Box of ammo'},
     {'int':2046,   	'hex':'7FE',  	'version':'S',    	'radius':20, 	'sprite':'BROK', 	'sequence':'A',    	'class':'P',   	'description':'Box of rockets'},
-    {'int':2049,   	'hex':'801',  	'version':'S',    	'radius':20, 	'sprite':'SBOX', 	'sequence':'A',    	'class':'P',   	'description':'Box of shells'},
-    {'int':2047,   	'hex':'7FF',  	'version':'R',    	'radius':20, 	'sprite':'CELL', 	'sequence':'A',    	'class':'P',   	'description':'Cell charge'},
     {'int':17, 	    'hex':'11',   	'version':'R',    	'radius':20, 	'sprite':'CELP', 	'sequence':'A',    	'class':'P',   	'description':'Cell charge pack'},
-    {'int':2010,   	'hex':'7DA',  	'version':'S',    	'radius':20, 	'sprite':'ROCK', 	'sequence':'A',    	'class':'P',   	'description':'Rocket'},
-    {'int':2008,   	'hex':'7D8',  	'version':'S',    	'radius':20, 	'sprite':'SHEL', 	'sequence':'A',    	'class':'P',   	'description':'Shotgun shells'}
 ]
 
 things['keys'] = [
@@ -53,25 +53,25 @@ things['keys'] = [
 ]
 
 things['monsters'] = [
-    {'int':68, 	    'hex':'44',   	    'version':'2',    	'radius':64, 	    'sprite':'BSPI', 	'sequence':'+',    	'class':'MO',   	    'description':'Arachnotron'},
-    {'int':64, 	    'hex':'40',   	    'version':'2',    	'radius':20, 	    'sprite':'VILE', 	'sequence':'+',    	'class':'MO',   	    'description':'Arch-Vile'},
-    {'int':3003,   	'hex':'BBB',  	    'version':'S',    	'radius':24, 	    'sprite':'BOSS', 	'sequence':'+',    	'class':'MO',   	    'description':'Baron of Hell'},
-    {'int':3005,   	'hex':'BBD',  	    'version':'R',    	'radius':31, 	    'sprite':'HEAD', 	'sequence':'+',    	'class':'MO^',          'description':'Cacodemon'},
-    {'int':65, 	    'hex':'41',   	    'version':'2',    	'radius':20, 	    'sprite':'CPOS', 	'sequence':'+',    	'class':'MO',   	    'description':'Chaingunner'},
-    {'int':72, 	    'hex':'48',   	    'version':'2',    	'radius':16, 	    'sprite':'KEEN', 	'sequence':'A+',  	'class':'MO^',          'description':'Commander Keen'},
-    {'int':16, 	    'hex':'10',   	    'version':'R',    	'radius':40, 	    'sprite':'CYBR', 	'sequence':'+',    	'class':'MO',   	    'description':'Cyberdemon'},
-    {'int':3002,   	'hex':'BBA',  	    'version':'S',    	'radius':30, 	    'sprite':'SARG', 	'sequence':'+',    	'class':'MO',   	    'description':'Demon'},
-    {'int':3004,   	'hex':'BBC',  	    'version':'S',    	'radius':20, 	    'sprite':'POSS', 	'sequence':'+',    	'class':'MO',   	    'description':'Former Human Trooper'},
-    {'int':9,  	    'hex':'9',    	    'version':'S',    	'radius':20, 	    'sprite':'SPOS', 	'sequence':'+',    	'class':'MO',   	    'description':'Former Human Sergeant'},
-    {'int':69, 	    'hex':'45',   	    'version':'2',    	'radius':24, 	    'sprite':'BOS2', 	'sequence':'+',    	'class':'MO',   	    'description':'Hell Knight'},
     {'int':3001,   	'hex':'BB9',  	    'version':'S',    	'radius':20, 	    'sprite':'TROO', 	'sequence':'+',    	'class':'MO',   	    'description':'Imp'},
-    {'int':3006,   	'hex':'BBE',  	    'version':'R',    	'radius':16, 	    'sprite':'SKUL', 	'sequence':'+',    	'class':'MO^',          'description':'Lost Soul'},
-    {'int':67, 	    'hex':'43',   	    'version':'2',    	'radius':48, 	    'sprite':'FATT', 	'sequence':'+',    	'class':'MO',   	    'description':'Mancubus'},
-    {'int':71, 	    'hex':'47',   	    'version':'2',    	'radius':31, 	    'sprite':'PAIN', 	'sequence':'+',    	'class':'MO^',          'description':'Pain Elemental'},
-    {'int':66, 	    'hex':'42',   	    'version':'2',    	'radius':20, 	    'sprite':'SKEL', 	'sequence':'+',    	'class':'MO',   	    'description':'Revenant'},
+    {'int':84, 	    'hex':'54',   	    'version':'2',    	'radius':20, 	    'sprite':'SSWV', 	'sequence':'+',    	'class':'MO',   	    'description':'Wolfenstein SS'},
+    {'int':3004,   	'hex':'BBC',  	    'version':'S',    	'radius':20, 	    'sprite':'POSS', 	'sequence':'+',    	'class':'MO',   	    'description':'Former Human Trooper'},
+    {'int':3002,   	'hex':'BBA',  	    'version':'S',    	'radius':30, 	    'sprite':'SARG', 	'sequence':'+',    	'class':'MO',   	    'description':'Demon'},
+    {'int':9,  	    'hex':'9',    	    'version':'S',    	'radius':20, 	    'sprite':'SPOS', 	'sequence':'+',    	'class':'MO',   	    'description':'Former Human Sergeant'},
     {'int':58, 	    'hex':'3A',   	    'version':'S',    	'radius':30, 	    'sprite':'SARG', 	'sequence':'+',    	'class':'MO',   	    'description':'Spectre'},
+    {'int':65, 	    'hex':'41',   	    'version':'2',    	'radius':20, 	    'sprite':'CPOS', 	'sequence':'+',    	'class':'MO',   	    'description':'Chaingunner'},
+    {'int':3006,   	'hex':'BBE',  	    'version':'R',    	'radius':16, 	    'sprite':'SKUL', 	'sequence':'+',    	'class':'MO^',          'description':'Lost Soul'},
+    {'int':3005,   	'hex':'BBD',  	    'version':'R',    	'radius':31, 	    'sprite':'HEAD', 	'sequence':'+',    	'class':'MO^',          'description':'Cacodemon'},
+    {'int':71, 	    'hex':'47',   	    'version':'2',    	'radius':31, 	    'sprite':'PAIN', 	'sequence':'+',    	'class':'MO^',          'description':'Pain Elemental'},
+    {'int':68, 	    'hex':'44',   	    'version':'2',    	'radius':64, 	    'sprite':'BSPI', 	'sequence':'+',    	'class':'MO',   	    'description':'Arachnotron'},
+    {'int':66, 	    'hex':'42',   	    'version':'2',    	'radius':20, 	    'sprite':'SKEL', 	'sequence':'+',    	'class':'MO',   	    'description':'Revenant'},
+    {'int':67, 	    'hex':'43',   	    'version':'2',    	'radius':48, 	    'sprite':'FATT', 	'sequence':'+',    	'class':'MO',   	    'description':'Mancubus'},
+    {'int':64, 	    'hex':'40',   	    'version':'2',    	'radius':20, 	    'sprite':'VILE', 	'sequence':'+',    	'class':'MO',   	    'description':'Arch-Vile'},
+    {'int':69, 	    'hex':'45',   	    'version':'2',    	'radius':24, 	    'sprite':'BOS2', 	'sequence':'+',    	'class':'MO',   	    'description':'Hell Knight'},
+    {'int':3003,   	'hex':'BBB',  	    'version':'S',    	'radius':24, 	    'sprite':'BOSS', 	'sequence':'+',    	'class':'MO',   	    'description':'Baron of Hell'},
+    {'int':16, 	    'hex':'10',   	    'version':'R',    	'radius':40, 	    'sprite':'CYBR', 	'sequence':'+',    	'class':'MO',   	    'description':'Cyberdemon'},
     {'int':7,  	    'hex':'7',    	    'version':'R',    	'radius':128,       'sprite':'SPID',    'sequence':'+',    	'class':'MO',   	    'description':'Spider Mastermind'},
-    {'int':84, 	    'hex':'54',   	    'version':'2',    	'radius':20, 	    'sprite':'SSWV', 	'sequence':'+',    	'class':'MO',   	    'description':'Wolfenstein SS'}
+    # {'int':72, 	    'hex':'48',   	    'version':'2',    	'radius':16, 	    'sprite':'KEEN', 	'sequence':'A+',  	'class':'MO^',          'description':'Commander Keen'}
 ]
 
 things['obstacles'] = [
@@ -161,7 +161,7 @@ all_types= [i['int'] for i in all_things] # Contains the list of Thing types id 
 essentials = list()
 for category in ['monsters', 'ammunitions', 'weapons']:
     essentials += things[category]
-essentials += [things['other'][2]]
+# essentials += [things['other'][2]]
 essentials= [i['int'] for i in essentials]
 
 def get_all_categories():
@@ -208,11 +208,11 @@ def get_type_id_from_index(index, essential = False):
     if essential:
         if index < 1 or index > len(essentials):
             return None
-        return essentials[index-1]['int']
+        return essentials[index-1]
     else:
         if index < 1 or index > len(all_things):
             return None
-        return all_things[index-1]['int']
+        return all_things[index-1]
 
 def get_index_from_type_id(thing_type,essential=False):
     """
