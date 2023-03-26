@@ -1,7 +1,6 @@
 from WADEditor import WADWriter
 import tensorflow as tf
-import numpy as np
-import os, sys
+import os, sys, json
 
 def parse_tfrecord(record,map_keys):
     parse_dic = {
@@ -16,6 +15,16 @@ def parse_tfrecord(record,map_keys):
             features[key] = feature
     return features
 
+def read_json(save_path = '../dataset/generated/doom/'):
+    file_path = save_path + 'meta.json'
+    if os.path.isfile(file_path):
+        with open(file_path, 'r') as jsonfile:
+            map_keys = json.load(jsonfile)
+        return map_keys
+    else:
+        print('No metadata found')
+        sys.exit()
+
 def read_record(keys,save_path='../dataset/generated/doom/'): 
     file_path = save_path + 'test.tfrecords'
     if not os.path.isfile(file_path):
@@ -26,8 +35,8 @@ def read_record(keys,save_path='../dataset/generated/doom/'):
     return sample_input
 
 
-key_pref = ['floormap','wallmap','heightmap','essentials']
-maps = read_record(key_pref)
+key_pref = read_json()
+maps = read_record(key_pref['keys'])
 writer = WADWriter()
 writer.add_level('MAP01')
 writer.from_images(maps['floormap'],maps['heightmap'],maps['wallmap'],maps['essentials'])

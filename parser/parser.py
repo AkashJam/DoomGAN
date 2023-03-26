@@ -73,16 +73,16 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   cate = ThingTypes.get_all_categories()
   for cat in cate:
     obj[cat] = ThingTypes.get_index_by_category(cat)
-  map_meta["start"] = {"type": "uint8", "min": obj["start"][0], "max": obj["start"][-1]}
-  map_meta["other"]=  {"type": "uint8", "min":obj["other"][0], "max": obj["other"][-1]}
-  map_meta["keys"] = {"type": "uint8", "min": obj["keys"][0], "max": obj["keys"][-1]}
-  map_meta["decorations"] = {"type": "uint8", "min": obj["decorations"][0], "max": obj["decorations"][-1]}
-  map_meta["obstacles"] = {"type": "uint8", "min": obj["obstacles"][0], "max": obj["obstacles"][-1]}
-  map_meta["monsters"] = {"type": "uint8", "min": obj["monsters"][0], "max": obj["monsters"][-1]}
-  map_meta["ammunitions"] = {"type": "uint8", "min": obj["ammunitions"][0], "max": obj["ammunitions"][-1]}
-  map_meta["weapons"] = {"type": "uint8", "min": obj["weapons"][0], "max": obj["weapons"][-1]}
-  map_meta["powerups"] = {"type": "uint8", "min": obj["powerups"][0], "max": obj["powerups"][-1]}
-  map_meta["artifacts"] = {"type": "uint8", "min": obj["artifacts"][0], "max": obj["artifacts"][-1]}
+  map_meta["start"] = {"type": "uint8", "min": obj["start"][0]-1, "max": obj["start"][-1]}
+  map_meta["other"]=  {"type": "uint8", "min":obj["other"][0]-1, "max": obj["other"][-1]}
+  map_meta["keys"] = {"type": "uint8", "min": obj["keys"][0]-1, "max": obj["keys"][-1]}
+  map_meta["decorations"] = {"type": "uint8", "min": obj["decorations"][0]-1, "max": obj["decorations"][-1]}
+  map_meta["obstacles"] = {"type": "uint8", "min": obj["obstacles"][0]-1, "max": obj["obstacles"][-1]}
+  map_meta["monsters"] = {"type": "uint8", "min": obj["monsters"][0]-1, "max": obj["monsters"][-1]}
+  map_meta["ammunitions"] = {"type": "uint8", "min": obj["ammunitions"][0]-1, "max": obj["ammunitions"][-1]}
+  map_meta["weapons"] = {"type": "uint8", "min": obj["weapons"][0]-1, "max": obj["weapons"][-1]}
+  map_meta["powerups"] = {"type": "uint8", "min": obj["powerups"][0]-1, "max": obj["powerups"][-1]}
+  map_meta["artifacts"] = {"type": "uint8", "min": obj["artifacts"][0]-1, "max": obj["artifacts"][-1]}
 
   obj['essentials'] = ThingTypes.get_index_by_category('essentials')
   map_meta["essentials"] = {"type": "uint8", "min": 0, "max": obj['essentials'][-1]}

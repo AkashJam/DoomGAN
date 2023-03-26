@@ -4,18 +4,18 @@ import tensorflow_addons as tfa
 import time, math, os
 from matplotlib import pyplot as plt
 import numpy as np
-from ganmeta import read_record, scaling_maps, generate_loss_graph, generate_sample
+from GanMeta import read_record, scaling_maps, generate_loss_graph, generate_sample, rescale_maps
 
 
 # Build the network
-def Generator(b_size=32,z_dim=100):
+def Generator(no_of_maps,b_size,z_dim):
     model = tf.keras.Sequential()
     model.add(layers.InputLayer((z_dim,), batch_size=b_size))
-    model.add(layers.Dense(8*8*512, use_bias=False, input_shape=(z_dim,)))
+    model.add(layers.Dense(8*8*256, use_bias=False, input_shape=(z_dim,)))
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
     
-    model.add(layers.Reshape((8, 8, 512))) 
+    model.add(layers.Reshape((8, 8, 256))) 
 
     model.add(layers.Conv2DTranspose(1024, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
     model.add(layers.BatchNormalization())
@@ -33,28 +33,24 @@ def Generator(b_size=32,z_dim=100):
     model.add(layers.BatchNormalization())
     model.add(layers.LeakyReLU())
 
-    model.add(layers.Conv2DTranspose(3, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')) 
-    assert model.output_shape == (b_size, 256, 256, 3)
+    model.add(layers.Conv2DTranspose(no_of_maps, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')) 
     return model
 
 
-def Discriminator(b_size=32):
+def Discriminator(no_of_maps,b_size):
     model = tf.keras.Sequential()
-    model.add(layers.InputLayer((256, 256, 3), batch_size=b_size))
+    model.add(layers.InputLayer((256, 256, no_of_maps), batch_size=b_size))
     model.add(layers.Conv2D(128, (4, 4), strides=(2, 2), padding='same',
-                                     input_shape=[256, 256, 3]))
+                                     input_shape=[256, 256, no_of_maps]))
     model.add(layers.LeakyReLU())
-    # model.add(layers.Dropout(0.3))
 
     model.add(layers.Conv2D(256, (4, 4), strides=(2, 2), padding='same'))
     model.add(layers.LayerNormalization())
     model.add(layers.LeakyReLU())
-    # model.add(layers.Dropout(0.3))
 
     model.add(layers.Conv2D(512, (4, 4), strides=(2, 2), padding='same'))
     model.add(layers.LayerNormalization())
     model.add(layers.LeakyReLU())
-    # model.add(layers.Dropout(0.3))
 
     model.add(layers.Conv2D(1024, (4, 4), strides=(2, 2), padding= 'same'))
     model.add(layers.LayerNormalization())
@@ -145,21 +141,26 @@ def train_step(real_images, latent_dim, discriminator_extra_steps = 3, gp_weight
     return {"d_loss": tf.abs(d_loss), "g_loss": tf.abs(g_loss)}
 
 
-def generate_and_save_images(model, epoch, test_input):
+def generate_and_save_images(model, epoch, test_input, keys):
     # `training` is set to False so all layers run in inference mode (batchnorm).
     predictions = model(test_input, training=False)
 
-    plt.figure(figsize=(20, 8))
-    for i in range(3):
-        plt.subplot(1, 3, i+1)
-        plt.imshow(predictions[0, :, :, i], cmap='gray') 
+    plt.figure(figsize=(8, 8))
+    for i in range(len(keys)):
+        plt.subplot(2, 2, i+1)
+        plt.title(keys[i] if keys[i] != 'essentials' else 'thingsmap')
+        if keys[i] in ['thingsmap','essentials']:
+            plt.imshow((predictions[0, :, :, i]*128)+(predictions[0, :, :, i]>0).astype(tf.float32)*127, cmap='gray') 
+        else:
+            plt.imshow(predictions[0, :, :, i], cmap='gray') 
         plt.axis('off')
 
-    plt.savefig('generated_maps/image_at_epoch_{:04d}.png'.format(epoch))
+    loc = 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/'
+    plt.savefig(loc + 'image_at_epoch_{:04d}.png'.format(epoch))
     plt.close()
 
 
-def train(dataset, map_meta, keys_pref, epochs, z_dim = 100):
+def train(dataset, map_meta, keys_pref, epochs, z_dim):
     critic_ts_loss = list()
     gen_ts_loss = list()
     seed = tf.random.normal([1, z_dim]) # 1 is the number of examples to generate
@@ -181,39 +182,40 @@ def train(dataset, map_meta, keys_pref, epochs, z_dim = 100):
                     critic_ts_loss.append(step_loss['d_loss'])
                     gen_ts_loss.append(step_loss['g_loss'])
                     print ('Time for batch {} is {} sec'.format(n, time.time()-start))
-        generate_and_save_images(generator, epoch + 1, seed)
+        generate_and_save_images(generator, epoch + 1, seed, keys_pref)
 
         # Save the model every 10 epochs
         if (epoch + 1) % 10 == 0:
             checkpoint.save(file_prefix = checkpoint_prefix)
-            generate_loss_graph(critic_ts_loss, gen_ts_loss)
             # Generating sample to view in pix2pix
             sample = generator(seed, training = False)
-            generate_sample(sample, keys_pref)
+            scaled_maps = rescale_maps(sample,map_meta,keys_pref)
+            gen_maps = tf.cast(scaled_maps,tf.uint8)
+            location = 'generated_maps/wgan/' if 'essentials' in keys_pref else 'generated_maps/hybrid/wgan/'
+            save_path = '../dataset/generated/doom/wgan/' if 'essentials' in keys_pref else '../dataset/generated/doom/hybrid/'
+            generate_loss_graph(critic_ts_loss, gen_ts_loss, location)
+            generate_sample(gen_maps, keys_pref, save_path)
+
 
         print ('Time for epoch {} is {} sec'.format(epoch + 1, time.time()-start))
-
-    # Generate after the final epoch
-    generate_and_save_images(generator, epochs, seed)
     
 
 if __name__ == "__main__":
     batch_size = 16
-    training_set, map_meta, sample = read_record(batch_size)
-    generator = Generator(batch_size)
-    discriminator = Discriminator(batch_size)
+    noise_dim = 100
+    map_keys = ['floormap', 'wallmap', 'heightmap']
+
+    training_set, map_meta, sample = read_record(batch_size = batch_size)
+    generator = Generator(len(map_keys), batch_size, noise_dim)
+    discriminator = Discriminator(len(map_keys), batch_size)
     generator_optimizer = tf.keras.optimizers.Adam(2e-4)
     discriminator_optimizer = tf.keras.optimizers.Adam(2e-4)
 
-    checkpoint_dir = './training_checkpoints/wgan'
+    checkpoint_dir = './training_checkpoints/wgan' if 'essentials' in map_keys else './training_checkpoints/hybrid/wgan'
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
                                     discriminator_optimizer=discriminator_optimizer,
                                     generator=generator,
                                     discriminator=discriminator)
 
-    # if os.path.exists(checkpoint_dir):                            
-    #     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
-
-    map_keys = ['floormap', 'wallmap', 'heightmap']
-    train(training_set,map_meta,map_keys,epochs=200)
+    train(training_set, map_meta, map_keys, epochs = 101, z_dim = noise_dim)

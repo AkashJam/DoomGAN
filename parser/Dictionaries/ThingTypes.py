@@ -2,24 +2,24 @@
 
 things = {}
 things['artifacts'] = [
-    {'int':2023, 	'hex':'7E7', 	'version':'R', 	'radius':20, 	'sprite':'PSTR', 	'sequence':'A' 	   ,    'class':'AP' ,	'description':'Berserk'},
-    {'int':2026, 	'hex':'7EA', 	'version':'S', 	'radius':20, 	'sprite':'PMAP', 	'sequence':'ABCDCB', 	'class':'AP', 	'description':'Computer map'},
     {'int':2014, 	'hex':'7DE', 	'version':'S', 	'radius':20, 	'sprite':'BON1', 	'sequence':'ABCDCB', 	'class':'AP' ,	'description':'Health potion'},
+    {'int':2015, 	'hex':'7DF', 	'version':'S', 	'radius':20, 	'sprite':'BON2', 	'sequence':'ABCDCB', 	'class':'AP' ,	'description':'Spiritual armor'},
+    {'int':2023, 	'hex':'7E7', 	'version':'R', 	'radius':20, 	'sprite':'PSTR', 	'sequence':'A' 	   ,    'class':'AP' ,	'description':'Berserk'},
+    {'int':2013, 	'hex':'7DD', 	'version':'S', 	'radius':20, 	'sprite':'SOUL', 	'sequence':'ABCDCB', 	'class':'AP' ,	'description':'Soul sphere'},
+    {'int':2026, 	'hex':'7EA', 	'version':'S', 	'radius':20, 	'sprite':'PMAP', 	'sequence':'ABCDCB', 	'class':'AP', 	'description':'Computer map'},
+    {'int':83,      'hex':'53 ', 	'version':'2', 	'radius':20, 	'sprite':'MEGA', 	'sequence':'ABCD' ,	    'class':'AP' ,	'description':'Megasphere'},
+    {'int':2045, 	'hex':'7FD', 	'version':'S', 	'radius':20, 	'sprite':'PVIS', 	'sequence':'AB' ,	    'class':'AP' ,	'description':'Light amplification visor'},
     {'int':2024, 	'hex':'7E8', 	'version':'S', 	'radius':20, 	'sprite':'PINS', 	'sequence':'ABCD' ,	    'class':'AP' ,	'description':'Invisibility'},
     {'int':2022, 	'hex':'7E6', 	'version':'R', 	'radius':20, 	'sprite':'PINV', 	'sequence':'ABCD' ,	    'class':'AP' ,	'description':'Invulnerability'},
-    {'int':2045, 	'hex':'7FD', 	'version':'S', 	'radius':20, 	'sprite':'PVIS', 	'sequence':'AB' ,	    'class':'AP' ,	'description':'Light amplification visor'},
-    {'int':83,      'hex':'53 ', 	'version':'2', 	'radius':20, 	'sprite':'MEGA', 	'sequence':'ABCD' ,	    'class':'AP' ,	'description':'Megasphere'},
-    {'int':2013, 	'hex':'7DD', 	'version':'S', 	'radius':20, 	'sprite':'SOUL', 	'sequence':'ABCDCB', 	'class':'AP' ,	'description':'Soul sphere'},
-    {'int':2015, 	'hex':'7DF', 	'version':'S', 	'radius':20, 	'sprite':'BON2', 	'sequence':'ABCDCB', 	'class':'AP' ,	'description':'Spiritual armor'}
     ]
 
 things['powerups'] = [
-    {'int':8,    	'hex':'8',    	'version':'S', 	'radius':20, 	'sprite':'BPAK', 	'sequence':'A', 	'class':'P', 	'description':'Backpack'},
-    {'int':2019, 	'hex':'7E3', 	'version':'S', 	'radius':20, 	'sprite':'ARM2', 	'sequence':'AB',    'class':'P', 	'description':'Blue armor'},
+    {'int':2011, 	'hex':'7DB', 	'version':'S', 	'radius':20, 	'sprite':'STIM', 	'sequence':'A', 	'class':'P', 	'description':'Stimpack'},
     {'int':2018, 	'hex':'7E2', 	'version':'S', 	'radius':20, 	'sprite':'ARM1', 	'sequence':'AB',    'class':'P', 	'description':'Green armor'},
+    {'int':8,    	'hex':'8',    	'version':'S', 	'radius':20, 	'sprite':'BPAK', 	'sequence':'A', 	'class':'P', 	'description':'Backpack'},
     {'int':2012, 	'hex':'7DC', 	'version':'S', 	'radius':20, 	'sprite':'MEDI', 	'sequence':'A', 	'class':'P', 	'description':'Medikit'},
+    {'int':2019, 	'hex':'7E3', 	'version':'S', 	'radius':20, 	'sprite':'ARM2', 	'sequence':'AB',    'class':'P', 	'description':'Blue armor'},
     {'int':2025, 	'hex':'7E9', 	'version':'S', 	'radius':20, 	'sprite':'SUIT', 	'sequence':'A', 	'class':'P', 	'description':'Radiation suit'},
-    {'int':2011, 	'hex':'7DB', 	'version':'S', 	'radius':20, 	'sprite':'STIM', 	'sequence':'A', 	'class':'P', 	'description':'Stimpack'}
 ]
 
 things['weapons'] = [
@@ -152,14 +152,14 @@ things['other'] = [
 ]
 
 all_things = list() # Contains the list of "thing" descriptors, ordered by category
-categories = ['other', 'keys', 'decorations', 'obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
+categories = ['monsters', 'ammunitions', 'powerups', 'artifacts', 'weapons', 'other', 'keys', 'decorations', 'obstacles']
 
 for category in categories:
     all_things += things[category]
 all_types= [i['int'] for i in all_things] # Contains the list of Thing types id used by doom (in the same order of 'all_things')
 
 essentials = list()
-for category in ['monsters', 'ammunitions', 'weapons']:
+for category in ['monsters', 'ammunitions', 'powerups', 'artifacts', 'weapons']:
     essentials += things[category]
 # essentials += [things['other'][2]]
 essentials= [i['int'] for i in essentials]

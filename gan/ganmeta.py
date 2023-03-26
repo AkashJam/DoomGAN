@@ -15,35 +15,38 @@ def read_json(save_path = '../dataset/parsed/doom/'):
         print('No metadata found')
         sys.exit()
 
-def read_record(batch_size=32, save_path='../dataset/parsed/doom/'): 
+def read_record(batch_size=32, save_path='../dataset/parsed/doom/',sample_wgan=False): 
     file_path = save_path + 'data.tfrecords'
     metadata = read_json()
     if not os.path.isfile(file_path):
         print('No dataset record found')
         sys.exit()
     tfr_dataset = tf.data.TFRecordDataset(file_path)
-    sample = parse_tfrecord(tfr_dataset,metadata)
+    sample = parse_tfrecord(tfr_dataset,metadata,sample_wgan)
     train_set = tfr_dataset.map(_parse_tfr_element)
     # Returns a shuffled training set that is seperated into batches
     return train_set.shuffle(metadata['count']*100).batch(batch_size, drop_remainder=True), metadata['maps_meta'], sample
 
 
 # Read TF Records and View the scaled maps
-def parse_tfrecord(record,meta):
+def parse_tfrecord(record, meta, sample_wgan):
     # If adding the wgan generated maps as the sample
-    # save_path = '../dataset/generated/doom/'
-    # file_path = save_path + 'sample.tfrecords'
-    # if not os.path.isfile(file_path):
-    #     print('No dataset record found')
-    #     sys.exit()
-    # record = tf.data.TFRecordDataset(file_path)
-    # map_keys = ['floormap','wallmap','heightmap']
-    map_keys = list(meta['maps_meta'].keys())
+    if sample_wgan:
+        save_path = '../dataset/generated/doom/hybrid/'
+        file_path = save_path + 'sample.tfrecords'
+        if not os.path.isfile(file_path):
+            print('No dataset record found')
+            sys.exit()
+        record = tf.data.TFRecordDataset(file_path)
+        map_keys = ['floormap','wallmap','heightmap']
+        sample_id = 0
+    else:
+        map_keys = list(meta['maps_meta'].keys())
+        sample_id = random.randrange(meta['count'])
     parse_dic = {
         key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
         }
     features = dict()
-    sample_id = random.randrange(meta['count'])
     for i,element in enumerate(record):
         if i != sample_id:
             continue
@@ -90,15 +93,30 @@ def scaling_maps(x, map_meta, map_names, use_sigmoid=True):
     return a + ((x-min_mat)*(b-a))/(max-min)
 
 
-def generate_loss_graph(d_loss,g_loss,location = 'generated_maps/convergence_graph.png'):
-    plt.figure
-    plt.title('Convergence Graph')
+def rescale_maps(x, map_meta, map_names, use_sigmoid=True):
+    a = 0 if use_sigmoid else -1
+    b = 1
+    min_mat = tf.constant([map_meta[m]['min'] for m in map_names], dtype=tf.float32) * tf.cast(tf.cast(x,tf.bool),tf.float32)
+    min = tf.constant([map_meta[m]['min'] for m in map_names], dtype=tf.float32) * tf.ones(tf.convert_to_tensor(x).get_shape())
+    max = tf.constant([map_meta[m]['max'] for m in map_names], dtype=tf.float32) * tf.ones(tf.convert_to_tensor(x).get_shape())
+    return tf.math.round(((max-min) * (x - a)/(b-a)) + min_mat)
+
+
+def generate_loss_graph(d_loss, g_loss, location = 'generated_maps/'):
+    plt.figure()
     plt.xlabel('Number of Steps')
     plt.ylabel('Loss')
-    plt.plot(d_loss, label='Dis Loss')
-    plt.plot(g_loss, label='Gen Loss')
-    plt.legend() # must be after labels
-    plt.savefig(location)
+    plt.plot(d_loss)
+    # plt.legend() # must be after labels
+    plt.savefig(location+'disc_loss_graph')
+    plt.close()
+
+    plt.figure()
+    plt.xlabel('Number of Steps')
+    plt.ylabel('Loss')
+    plt.plot(g_loss)
+    # plt.legend() # must be after labels
+    plt.savefig(location+'gen_loss_graph')
     plt.close()
 
 def _bytes_feature(value):
@@ -112,12 +130,7 @@ def serialize_array(array):
   array = tf.io.serialize_tensor(array)
   return array
 
-def generate_sample(imgs,keys,test = False):
-    if test:
-        file_name = 'test.tfrecords'
-    else:
-        file_name = 'sample.tfrecords'
-    save_path = '../dataset/generated/doom/'
+def generate_sample(imgs ,keys, save_path = '../dataset/generated/doom/', file_name = 'sample.tfrecords'):
     file_path = save_path + file_name
     with tf.io.TFRecordWriter(file_path) as writer:
         gen_maps = dict()
