@@ -249,7 +249,7 @@ class WAD(dict):
 
 
 class WADWriter(object):
-    def __init__(self, scale_factor=64):
+    def __init__(self, scale_factor=128):
         """
         Class for writing a WAD file.
         Start by defining a new level with add_level(), then place new sectors and "things". Changes are submitted only

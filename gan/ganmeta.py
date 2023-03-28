@@ -1,9 +1,10 @@
 import tensorflow as tf
 import sys, os, json, random
 from matplotlib import pyplot as plt
-import numpy as np
+# Used for image operations on tensor
 from tensorflow.python.ops.numpy_ops import np_config
 np_config.enable_numpy_behavior()
+
 
 def read_json(save_path = '../dataset/parsed/doom/'):
     file_path = save_path + 'metadata.json'
@@ -14,6 +15,7 @@ def read_json(save_path = '../dataset/parsed/doom/'):
     else:
         print('No metadata found')
         sys.exit()
+
 
 def read_record(batch_size=32, save_path='../dataset/parsed/doom/',sample_wgan=False): 
     file_path = save_path + 'data.tfrecords'
@@ -28,7 +30,6 @@ def read_record(batch_size=32, save_path='../dataset/parsed/doom/',sample_wgan=F
     return train_set.shuffle(metadata['count']*100).batch(batch_size, drop_remainder=True), metadata['maps_meta'], sample
 
 
-# Read TF Records and View the scaled maps
 def parse_tfrecord(record, meta, sample_wgan):
     # If adding the wgan generated maps as the sample
     if sample_wgan:
@@ -76,7 +77,7 @@ def _parse_tfr_element(element):
     return features
 
 
-def scaling_maps(x, map_meta, map_names, use_sigmoid=True):
+def normalize_maps(x, map_meta, map_names, use_sigmoid=True):
     """
     Compute the scaling of eve ry map based on their .meta statistics (max and min)
      to bring all values inside (0,1) or (-1,1)
@@ -102,26 +103,46 @@ def rescale_maps(x, map_meta, map_names, use_sigmoid=True):
     return tf.math.round(((max-min) * (x - a)/(b-a)) + min_mat)
 
 
-def generate_loss_graph(d_loss, g_loss, location = 'generated_maps/'):
-    plt.figure()
-    plt.xlabel('Number of Steps')
-    plt.ylabel('Loss')
-    plt.plot(d_loss)
-    # plt.legend() # must be after labels
-    plt.savefig(location+'disc_loss_graph')
+def generate_loss_graph(loss, key, location = 'generated_maps/'):
+    for i in range(len(loss)):
+        plt.figure()
+        plt.xlabel('Number of Steps')
+        plt.ylabel('Loss')
+        plt.plot(loss[i])
+        # plt.legend() # must be after labels
+        plt.savefig(location + key[i] + '_loss_graph')
+        plt.close()
+
+
+def generate_images(model, seed, epoch, keys, is_p2p = False, test_input = None, test_keys = None, meta = None):
+    prediction = model([test_input, seed], training=True) if is_p2p else model(seed, training=False)
+    n = 128
+    if is_p2p:
+        scaled_pred = rescale_maps(prediction,meta,keys)
+        for i in range(len(keys)):
+            essentials = scaled_pred[0,:,:,i] if i == 0 else tf.maximum(essentials, scaled_pred[0,:,:,i])
+        n = n/meta['essentials']['max']
+
+    title = test_keys + ['essentials'] if is_p2p else keys
+    display_list = [test_input[0,:,:,i] for i in range(len(test_keys))] + [essentials] if is_p2p else [prediction[0,:,:,i] for i in range(len(keys))]
+
+    plt.figure(figsize=(8, 8))
+    for i in range(len(title)):
+        plt.subplot(2, 2, i+1)
+        plt.title(title[i] if title[i] != 'essentials' else 'thingsmap')
+        if keys[i] in ['thingsmap','essentials']:
+            plt.imshow((display_list[i]*n)+(display_list[i]>0).astype(tf.float32)*127, cmap='gray') 
+        else:
+            plt.imshow(display_list[i], cmap='gray') 
+        plt.axis('off')
+    loc = 'generated_maps/hybrid/pix2pix/' if is_p2p else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/'
+    plt.savefig(loc + 'image_at_epoch_{:04d}.png'.format(epoch))
     plt.close()
 
-    plt.figure()
-    plt.xlabel('Number of Steps')
-    plt.ylabel('Loss')
-    plt.plot(g_loss)
-    # plt.legend() # must be after labels
-    plt.savefig(location+'gen_loss_graph')
-    plt.close()
 
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))): # if value ist tensor
+    if isinstance(value, type(tf.constant(0))): # if value is tensor
         value = value.numpy() # get value of tensor
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 

@@ -5,7 +5,8 @@ from HybridGen import hybrid_fmaps
 from WganGen import wgan_fmaps
 from GanMeta import read_record
 
-def plot_graph(props):
+
+def plot_prop_graph(props):
     sets = ("Monsters", "Ammunitions", "Power-ups", "Artifacts", "Weapons")
 
     x = np.arange(len(sets))  # the label locations
@@ -62,7 +63,8 @@ def calc_proportions(real, wgan, hybrid, keys, meta):
     proportions = {'Real': tuple(round(100*sum(real_props[cate])/len(real_props[cate])) for cate in obj_cate), 
                     'Wgan': tuple(round(100*sum(wgan_props[cate])/len(wgan_props[cate])) for cate in obj_cate), 
                     'Hybrid': tuple(round(100*sum(hybrid_props[cate])/len(hybrid_props[cate])) for cate in obj_cate)}
-    plot_graph(proportions)
+    plot_prop_graph(proportions)
+
 
 def calc_stats(real, wgan, hybrid, keys, meta):
     obj_cate = ['monsters','ammunitions','powerups','artifacts','weapons']
@@ -74,15 +76,17 @@ def calc_stats(real, wgan, hybrid, keys, meta):
     for cate in obj_cate:
         min = meta[cate]['min']
         max = meta[cate]['max']
-        real_cate = real_count[min:max]
-        wgan_cate = wgan_count[min:max]
-        hybrid_cate = hybrid_count[min:max]
-        plt.figure
+        real_cate = [0] + real_count[min:max]
+        wgan_cate = [0] + wgan_count[min:max]
+        hybrid_cate = [0] + hybrid_count[min:max]
+        fig, ax = plt.subplots(1, 1)
         plt.xlabel(cate+' type')
         plt.ylabel('Average object population')
         plt.plot(real_cate, label="real")
         plt.plot(wgan_cate, label="wgan")
         plt.plot(hybrid_cate, label="hybrid")
+        ax.set_xlim(1, max-min)
+        ax.xaxis.get_major_locator().set_params(integer=True)
         plt.legend() # must be after labels
         # plt.savefig(location+'disc_loss_graph')
         plt.show()
@@ -120,27 +124,22 @@ def calc_stats(real, wgan, hybrid, keys, meta):
 
 
 if __name__ == "__main__":
-    b_size = 1
+    b_size = 100
     dataset, map_meta, sample = read_record(batch_size=b_size)
+    i = 0
     for data in dataset:
         z = tf.random.normal([b_size, 100])
         noise = tf.random.normal([b_size, 256, 256, 1])
-        hybrid_maps, keys = hybrid_fmaps(z,noise) # generate each set of feature maps individually and stack them with axis =0
-        wgan_maps, keys = wgan_fmaps(z)
+        hybrid_maps, keys, n_items = hybrid_fmaps(z,noise) # generate each set of feature maps individually and stack them with axis =0
+        wgan_maps, keys, n_items = wgan_fmaps(z)
         real_maps = np.stack([data[m] for m in keys], axis=-1)
-        # plt.figure(figsize=(8, 4))
-        # for j in range(len(keys)):
-        #     plt.subplot(1, 4, j+1)
-        #     # plt.title(feature_keys[j] if feature_keys[j] != 'essentials' else 'thingsmap')
-        #     if keys[j] in ['essentials','thingsmap']:
-        #         plt.imshow((real_maps[0,:,:,j]*55/48)+tf.cast(real_maps[0,:,:,j]>0,tf.float32)*200, cmap='gray')
-        #     else:
-        #         plt.imshow(real_maps[0,:,:,j], cmap='gray')
-        #     plt.axis('off')
-        # plt.show()
-        calc_proportions(real_maps,wgan_maps,hybrid_maps,keys,map_meta)
-        calc_stats(real_maps,wgan_maps,hybrid_maps,keys,map_meta)
+        r_maps = tf.concat([r_maps,real_maps], axis=0) if i != 0 else real_maps
+        h_maps = tf.concat([h_maps,hybrid_maps], axis=0) if i != 0 else hybrid_maps
+        w_maps = tf.concat([w_maps,wgan_maps], axis=0) if i != 0 else wgan_maps
+        i+=1
         break
+    calc_proportions(real_maps,wgan_maps,hybrid_maps,keys,map_meta)
+    calc_stats(real_maps,wgan_maps,hybrid_maps,keys,map_meta)
 
 
 

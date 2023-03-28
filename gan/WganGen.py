@@ -5,9 +5,8 @@ from GanMeta import generate_sample, read_json, rescale_maps
 
 
 def generate_wgan_maps(seed):
-    b_size = seed.shape[0]
     latent_dim = seed.shape[1]
-    generator = wganGen(4, b_size, latent_dim)
+    generator = wganGen(4, latent_dim)
     checkpoint_dir = './training_checkpoints/wgan'
     checkpoint = tf.train.Checkpoint(generator=generator)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()

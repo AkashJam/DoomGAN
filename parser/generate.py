@@ -15,7 +15,7 @@ def parse_tfrecord(record,map_keys):
             features[key] = feature
     return features
 
-def read_json(save_path = '../dataset/generated/doom/'):
+def read_json(save_path = '../dataset/generated/doom/hybrid/'):
     file_path = save_path + 'meta.json'
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
@@ -25,7 +25,7 @@ def read_json(save_path = '../dataset/generated/doom/'):
         print('No metadata found')
         sys.exit()
 
-def read_record(keys,save_path='../dataset/generated/doom/'): 
+def read_record(keys,save_path='../dataset/generated/doom/hybrid/'): 
     file_path = save_path + 'test.tfrecords'
     if not os.path.isfile(file_path):
         print('No dataset record found')
