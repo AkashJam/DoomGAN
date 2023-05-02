@@ -4,82 +4,63 @@ import tensorflow_addons as tfa
 import time, math, os
 from GanMeta import *
 
+def upsample(x, filters):
+    x = layers.Conv2DTranspose(filters, (4, 4), strides=(2, 2), padding='same', use_bias=False)(x) 
+    x = layers.BatchNormalization()(x)
+    x = layers.LeakyReLU()(x)
+    return x
 
-# Build the network
+def downsample(x, filters, use_norm = True):
+    x = layers.Conv2D(filters, (4, 4), strides=(2, 2), padding='same')(x)
+    if use_norm:
+        x = layers.LayerNormalization()(x)
+    x = layers.LeakyReLU()(x)
+    return x
+
+
 def Generator(n_maps, noise_dim):
-    model = tf.keras.Sequential()
-    model.add(layers.InputLayer(noise_dim,))
-    model.add(layers.Dense(8*8*256, use_bias=False, input_shape=(noise_dim,)))
-    model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU())
-    
-    model.add(layers.Reshape((8, 8, 256))) 
+    noise = layers.Input(noise_dim,)
+    x = layers.Dense(8*8*256, use_bias=False, input_shape=(noise_dim,))(noise)
+    x = layers.BatchNormalization()(x)
+    x = layers.LeakyReLU()(x)
+    x = layers.Reshape((8, 8, 256))(x)
 
-    model.add(layers.Conv2DTranspose(1024, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
-    model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU())
+    x = upsample(x, 1024)
+    x = upsample(x, 512)
+    x = upsample(x, 256)
+    x = upsample(x, 128)
 
-    model.add(layers.Conv2DTranspose(512, (4, 4), strides=(2, 2), padding='same', use_bias=False)) 
-    model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Conv2DTranspose(256, (4, 4), strides=(2, 2), padding='same', use_bias= False))
-    model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Conv2DTranspose(128, (4, 4), strides=(2, 2), padding='same', use_bias=False))
-    model.add(layers.BatchNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Conv2DTranspose(n_maps, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')) 
+    x = layers.Conv2DTranspose(n_maps, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')(x)
+    model = tf.keras.models.Model(noise, x, name="generator")
     return model
 
 
 def Discriminator():
-    model = tf.keras.Sequential()
-    model.add(layers.InputLayer((256, 256, len(map_keys)),))
-    model.add(layers.Conv2D(128, (4, 4), strides=(2, 2), padding='same',
-                                     input_shape=[256, 256, len(map_keys)]))
-    model.add(layers.LeakyReLU())
+    input_img = layers.Input((256, 256, len(map_keys)),)
 
-    model.add(layers.Conv2D(256, (4, 4), strides=(2, 2), padding='same'))
-    model.add(layers.LayerNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Conv2D(512, (4, 4), strides=(2, 2), padding='same'))
-    model.add(layers.LayerNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Conv2D(1024, (4, 4), strides=(2, 2), padding= 'same'))
-    model.add(layers.LayerNormalization())
-    model.add(layers.LeakyReLU())
-
-    model.add(layers.Flatten())
-    model.add(layers.Dense(1))
-
+    x = downsample(input_img, 128, use_norm = False)
+    x = downsample(x, 256)
+    x = downsample(x, 512)
+    x = downsample(x, 1024)
+    
+    x = layers.Flatten()(x)
+    x = layers.Dense(1)(x)
+    model = tf.keras.models.Model(input_img, x, name="discriminator")
     return model
 
 
-# This method returns a helper function to compute cross entropy loss
 def discriminator_loss(real_img, fake_img):
     real_loss = tf.reduce_mean(real_img)
     fake_loss = tf.reduce_mean(fake_img)
     return fake_loss - real_loss
 
 
-# Define the loss functions for the generator.
 def generator_loss(fake_img):
     return -tf.reduce_mean(fake_img)
 
 
-# Train
 def gradient_penalty(real_images, fake_images):
-    """Calculates the gradient penalty.
-
-    This loss is calculated on an interpolated image
-    and added to the discriminator loss.
-    """
-    # Get the interpolated image
+    # Calculates the gradient penalty on an interpolated image and is added to the discriminator loss.
     alpha = tf.random.normal([batch_size, 1, 1, 1], 0.0, 1.0)
     diff = fake_images - real_images
     interpolated = real_images + alpha * diff
@@ -95,7 +76,7 @@ def gradient_penalty(real_images, fake_images):
     return gp
 
 # Return the generator and discriminator losses as a loss dictionary
-def train_step(real_images, discriminator_extra_steps = 1, gp_weight = 10.0):
+def train_step(real_images, discriminator_extra_steps = 1, gp_weight = 15.0):
     if isinstance(real_images, tuple):
         real_images = real_images[0]
 
@@ -161,7 +142,7 @@ def train(epochs):
 
         # Save the model every 10 epochs
         if (epoch + 1) % 10 == 0:
-            checkpoint.save(file_prefix = checkpoint_prefix)
+            # checkpoint.save(file_prefix = checkpoint_prefix)
             loc = 'generated_maps/wgan/' if 'essentials' in map_keys else 'generated_maps/hybrid/wgan/'
             generate_loss_graph([critic_ts_loss, gen_ts_loss], ['critic','gen'], location = loc)
 
@@ -188,9 +169,6 @@ if __name__ == "__main__":
 
     checkpoint_dir = './training_checkpoints/wgan' if 'essentials' in map_keys else './training_checkpoints/hybrid/wgan'
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-    checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
-                                    discriminator_optimizer=discriminator_optimizer,
-                                    generator=generator,
-                                    discriminator=discriminator)
+    checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer, discriminator_optimizer=discriminator_optimizer, generator=generator, discriminator=discriminator)
 
     train(101)

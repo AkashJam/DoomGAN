@@ -13,8 +13,8 @@ def generate_wgan_maps(seed):
     prediction = generator(seed, training=False)
     return prediction
 
-def wgan_fmaps(seed):
-    maps = generate_wgan_maps(seed)
+def wgan_fmaps(model, seed):
+    maps = model(seed, training=False)
     meta = read_json()
     n_items = meta['maps_meta']['essentials']['max']
     keys = ['floormap', 'wallmap', 'heightmap', 'essentials']
@@ -26,7 +26,13 @@ if __name__ == "__main__":
     z_dim = 100
     batch_size = 1
     z = tf.random.normal([batch_size, z_dim])
-    feature_maps,feature_keys, max_items = wgan_fmaps(z)
+    
+    generator = wganGen(4, z_dim)
+    checkpoint_dir = './training_checkpoints/wgan'
+    checkpoint = tf.train.Checkpoint(generator=generator)
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
+
+    feature_maps,feature_keys, max_items = wgan_fmaps(generator, z)
 
     plt.figure(figsize=(8, 4))
     for j in range(len(feature_keys)):

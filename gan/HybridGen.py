@@ -5,26 +5,9 @@ from wgan import Generator as wganGen
 from GanMeta import generate_sample, read_json, rescale_maps
 
 
-def generate_wgan_maps(seed):
-    latent_dim = seed.shape[1]
-    generator = wganGen(3, latent_dim)
-    checkpoint_dir = './training_checkpoints/hybrid/wgan'
-    checkpoint = tf.train.Checkpoint(generator=generator)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-    prediction = generator(seed, training=False)
-    return prediction
-
-def generate_p2p_maps(input_maps,noise):
-    generator = pix2pixGen()
-    checkpoint_dir = './training_checkpoints/hybrid/pix2pix'
-    checkpoint = tf.train.Checkpoint(generator=generator)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-    prediction = generator([input_maps,noise], training=True)
-    return prediction
-
-def hybrid_fmaps(seed,noisy_img):
-    topological_maps = generate_wgan_maps(seed)
-    functional_maps = generate_p2p_maps(topological_maps,noisy_img)
+def hybrid_fmaps(wgan_model, p2p_model, seed, noisy_img):
+    topological_maps = wgan_model(seed, training=False)
+    functional_maps = p2p_model([topological_maps,noisy_img], training=True)
     samples = tf.concat([topological_maps,functional_maps],axis=-1)
     meta = read_json()
     n_items = meta['maps_meta']['essentials']['max']
@@ -49,22 +32,34 @@ def hybrid_fmaps(seed,noisy_img):
 
 
 if __name__ == "__main__":
-    batch_size = 1
+    batch_size = 100
     z_dim = 100
     z = tf.random.normal([batch_size, z_dim])
     noisy_img = tf.random.normal([batch_size, 256, 256, 1])
-    feature_maps, feature_keys, max_items = hybrid_fmaps(z, noisy_img)
-    
-    plt.figure(figsize=(8, 4))
-    for j in range(len(feature_keys)):
-        plt.subplot(1, 4, j+1)
-        # plt.title(feature_keys[j] if feature_keys[j] != 'essentials' else 'thingsmap')
-        if feature_keys[j] in ['essentials','thingsmap']:
-            plt.imshow((feature_maps[0,:,:,j]*55/max_items)+tf.cast(feature_maps[0,:,:,j]>0,tf.float32)*200, cmap='gray')
-        else:
-            plt.imshow(feature_maps[0,:,:,j], cmap='gray')
-        plt.axis('off')
-    plt.show()
 
-    generate_sample(feature_maps, feature_keys, save_path='../dataset/generated/doom/hybrid/', file_name = 'test.tfrecords')
+    wgen = wganGen(3, z_dim)
+    checkpoint_dir = './training_checkpoints/hybrid/wgan'
+    checkpoint = tf.train.Checkpoint(generator=wgen)
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
+
+    pgen = pix2pixGen()
+    checkpoint_dir = './training_checkpoints/hybrid/pix2pix'
+    checkpoint = tf.train.Checkpoint(generator=pgen)
+    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
+
+    feature_maps, feature_keys, max_items = hybrid_fmaps(wgen, pgen, z, noisy_img)
+    
+    for i in range(10):
+        plt.figure(figsize=(8, 4))
+        for j in range(len(feature_keys)):
+            plt.subplot(1, 4, j+1)
+            # plt.title(feature_keys[j] if feature_keys[j] != 'essentials' else 'thingsmap')
+            if feature_keys[j] in ['essentials','thingsmap']:
+                plt.imshow((feature_maps[i,:,:,j]*55/max_items)+tf.cast(feature_maps[i,:,:,j]>0,tf.float32)*200, cmap='gray')
+            else:
+                plt.imshow(feature_maps[i,:,:,j], cmap='gray')
+            plt.axis('off')
+        plt.show()
+
+    # generate_sample(feature_maps, feature_keys, save_path='../dataset/generated/doom/hybrid/', file_name = 'test.tfrecords')
     print('created sample level record')

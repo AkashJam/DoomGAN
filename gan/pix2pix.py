@@ -167,6 +167,9 @@ def train(epochs):
 
 if __name__ == "__main__":
   batch_size = 1
+  input_params = ['floormap', 'wallmap', 'heightmap']
+  output_params = ['monsters','ammunitions','powerups','artifacts','weapons']
+
   training_set, map_meta, sample = read_record(batch_size, sample_wgan=True)
   generator = Generator()
   discriminator = Discriminator()
@@ -175,14 +178,6 @@ if __name__ == "__main__":
 
   checkpoint_dir = './training_checkpoints/hybrid/pix2pix'
   checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
-  checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer,
-                                  discriminator_optimizer=discriminator_optimizer,
-                                  generator=generator,
-                                  discriminator=discriminator)
+  checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer, discriminator_optimizer=discriminator_optimizer, generator=generator, discriminator=discriminator)
 
-  # if os.path.exists(checkpoint_dir):                            
-  #     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
-
-  input_params = ['floormap', 'wallmap', 'heightmap']
-  output_params = ['monsters','ammunitions','powerups','artifacts','weapons']
   train(101)
