@@ -95,9 +95,6 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   key_meta = {key: map_meta[key] for key in keys}
   map_dict['maps_meta'] = key_meta
 
-  if not os.path.exists(save_path):
-    os.makedirs(save_path)
-
   file = save_path + 'metadata.json'
   with open(file, 'w') as jsonfile:
     json.dump(map_dict, jsonfile)
@@ -133,6 +130,8 @@ def generate_tfrecord(maps,keys_pref,cate_pref,save_path):
   file_name = 'data.tfrecords'
   file_path = save_path + file_name
   keys = keys_pref+cate_pref
+  if not os.path.exists(save_path):
+    os.makedirs(save_path)
   with tf.io.TFRecordWriter(file_path) as writer:
     for map in maps:
       org_maps = map_padding(map,keys_pref,cate_pref)

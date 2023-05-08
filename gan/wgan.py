@@ -1,52 +1,53 @@
 import tensorflow as tf
-from tensorflow.keras import layers
 import tensorflow_addons as tfa
 import time, math, os
+from NetworkArchitecture import topological_maps, WGAN_gen, WGAN_disc
 from GanMeta import *
 
-def upsample(x, filters):
-    x = layers.Conv2DTranspose(filters, (4, 4), strides=(2, 2), padding='same', use_bias=False)(x) 
-    x = layers.BatchNormalization()(x)
-    x = layers.LeakyReLU()(x)
-    return x
+def upsample(filters, kernel, stride, apply_dropout=False):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Conv2DTranspose(filters, kernel, strides=stride, padding='same', use_bias=False))
+    result.add(tf.keras.layers.BatchNormalization())
+    if apply_dropout:
+      result.add(tf.keras.layers.Dropout(0.5))
+    result.add(tf.keras.layers.LeakyReLU())
+    return result
 
-def downsample(x, filters, use_norm = True):
-    x = layers.Conv2D(filters, (4, 4), strides=(2, 2), padding='same')(x)
+def downsample(filters, kernel, stride, use_norm = True):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Conv2D(filters, kernel, strides=stride, padding='same'))
     if use_norm:
-        x = layers.LayerNormalization()(x)
-    x = layers.LeakyReLU()(x)
-    return x
+        result.add(tf.keras.layers.LayerNormalization())
+    result.add(tf.keras.layers.LeakyReLU())
+    return result
 
 
 def Generator(n_maps, noise_dim):
-    noise = layers.Input(noise_dim,)
-    x = layers.Dense(8*8*256, use_bias=False, input_shape=(noise_dim,))(noise)
-    x = layers.BatchNormalization()(x)
-    x = layers.LeakyReLU()(x)
-    x = layers.Reshape((8, 8, 256))(x)
+    noise = tf.keras.layers.Input(shape=[noise_dim])
+    x = tf.keras.layers.Dense(8*8*128, use_bias=False)(noise)
+    x = tf.keras.layers.BatchNormalization()(x)
+    x = tf.keras.layers.LeakyReLU()(x)
+    x = tf.keras.layers.Reshape((8, 8, 128))(x)
 
-    x = upsample(x, 1024)
-    x = upsample(x, 512)
-    x = upsample(x, 256)
-    x = upsample(x, 128)
+    for layer in WGAN_gen:
+        x = upsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['dropout'])(x)
 
-    x = layers.Conv2DTranspose(n_maps, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')(x)
-    model = tf.keras.models.Model(noise, x, name="generator")
-    return model
+    x = tf.keras.layers.Conv2DTranspose(n_maps, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')(x)
+
+    return tf.keras.Model(inputs=noise, outputs=x)
 
 
 def Discriminator():
-    input_img = layers.Input((256, 256, len(map_keys)),)
+    input_img = tf.keras.layers.Input(shape=[256, 256, map_no])
+    x = input_img
 
-    x = downsample(input_img, 128, use_norm = False)
-    x = downsample(x, 256)
-    x = downsample(x, 512)
-    x = downsample(x, 1024)
+    for layer in WGAN_disc:
+        x = downsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['norm'])(x)
     
-    x = layers.Flatten()(x)
-    x = layers.Dense(1)(x)
-    model = tf.keras.models.Model(input_img, x, name="discriminator")
-    return model
+    x = tf.keras.layers.Flatten()(x)
+    x = tf.keras.layers.Dense(1)(x)
+    
+    return tf.keras.Model(inputs=input_img, outputs=x)
 
 
 def discriminator_loss(real_img, fake_img):
@@ -76,14 +77,12 @@ def gradient_penalty(real_images, fake_images):
     return gp
 
 # Return the generator and discriminator losses as a loss dictionary
-def train_step(real_images, discriminator_extra_steps = 1, gp_weight = 15.0):
+def train_step(real_images):
     if isinstance(real_images, tuple):
         real_images = real_images[0]
 
     for i in range(discriminator_extra_steps):
-        random_latent_vectors = tf.random.normal(
-            shape=(batch_size, z_dim)
-        )
+        random_latent_vectors = tf.random.normal(shape=(batch_size, z_dim))
         with tf.GradientTape() as tape:
             fake_images = generator(random_latent_vectors, training=True)
             fake_logits = discriminator(fake_images, training=True)
@@ -116,9 +115,39 @@ def train_step(real_images, discriminator_extra_steps = 1, gp_weight = 15.0):
     return {"d_loss": tf.abs(d_loss), "g_loss": tf.abs(g_loss)}
 
 
+def v_loss():
+    valid_c_loss = list()
+    valid_g_loss = list()
+    for image_batch in validation_set:
+        images = tf.stack([image_batch[m] for m in map_keys], axis=-1)
+        scaled_images = normalize_maps(images, map_meta, map_keys)
+        for rotation in [0, 90, 180, 270]:
+            # Rotating images to account for different orientations
+            real_images = tfa.image.rotate(scaled_images, math.radians(rotation))                
+            for flip in [0, 1]:
+                if flip:
+                    real_images = tf.image.flip_left_right(real_images)
+                random_latent_vectors = tf.random.normal(shape=(batch_size, z_dim))
+                fake_images = generator(random_latent_vectors, training=False)
+                fake_logits = discriminator(fake_images, training=False)
+                real_logits = discriminator(real_images, training=False)
+
+                d_cost = discriminator_loss(real_img=real_logits, fake_img=fake_logits)
+                gp = gradient_penalty(real_images, fake_images)
+                c_loss = d_cost + gp * gp_weight
+                g_loss = generator_loss(fake_logits)
+                valid_c_loss.append(c_loss)
+                valid_g_loss.append(g_loss)
+                # print('g_loss: ', g_loss, ' c_loss :', c_loss)
+        
+    return sum(valid_c_loss)/len(valid_c_loss),sum(valid_g_loss)/len(valid_g_loss)
+
+
 def train(epochs):
     critic_ts_loss = list()
     gen_ts_loss = list()
+    critic_vs_loss = list()
+    gen_vs_loss = list()
     seed = tf.random.normal([1, z_dim]) # 1 is the number of examples to generate
     # Start training
     for epoch in range(epochs):
@@ -138,13 +167,19 @@ def train(epochs):
                     critic_ts_loss.append(step_loss['d_loss'])
                     gen_ts_loss.append(step_loss['g_loss'])
                     print ('Time for batch {} is {} sec'.format(n, time.time()-start))
+
+        v_closs, v_gloss = v_loss()
+        critic_vs_loss = critic_vs_loss + [v_closs]
+        gen_vs_loss = gen_vs_loss + [v_gloss]
         generate_images(generator, seed, epoch + 1, map_keys)
 
         # Save the model every 10 epochs
-        if (epoch + 1) % 10 == 0:
-            # checkpoint.save(file_prefix = checkpoint_prefix)
+        if (epoch + 1) % 5 == 0:
+            checkpoint.save(file_prefix = checkpoint_prefix)
             loc = 'generated_maps/wgan/' if 'essentials' in map_keys else 'generated_maps/hybrid/wgan/'
             generate_loss_graph([critic_ts_loss, gen_ts_loss], ['critic','gen'], location = loc)
+            generate_loss_graph([critic_vs_loss, gen_vs_loss], ['critic_validation','gen_validation'], location = loc)
+
 
         print ('Time for epoch {} is {} sec'.format(epoch + 1, time.time()-start))
     
@@ -159,10 +194,14 @@ def train(epochs):
 if __name__ == "__main__":
     batch_size = 16
     z_dim = 100
-    map_keys = ['floormap', 'wallmap', 'heightmap']
+    gen_items = True
+    gp_weight = 15
+    discriminator_extra_steps = 3
+    map_keys = topological_maps + ['essentials'] if gen_items else topological_maps
+    map_no = len(map_keys)
 
-    training_set, map_meta, sample = read_record(batch_size = batch_size)
-    generator = Generator(len(map_keys),z_dim)
+    training_set, validation_set, val_batches, map_meta, sample = read_record(batch_size = batch_size)
+    generator = Generator(map_no,z_dim)
     discriminator = Discriminator()
     generator_optimizer = tf.keras.optimizers.Adam(2e-4)
     discriminator_optimizer = tf.keras.optimizers.Adam(2e-4)
