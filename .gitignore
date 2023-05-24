@@ -9,6 +9,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Images and jsons
+*.png
+*.json
+
 # C extensions
 *.so
 
