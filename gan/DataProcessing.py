@@ -1,9 +1,5 @@
+import os, json, sys, random
 import tensorflow as tf
-import sys, os, json, random, math
-from matplotlib import pyplot as plt
-# Used for image operations on tensor
-from tensorflow.python.ops.numpy_ops import np_config
-np_config.enable_numpy_behavior()
 
 
 def read_json(save_path = '../dataset/parsed/doom/'):
@@ -27,16 +23,14 @@ def read_record(batch_size=32, save_path='../dataset/parsed/doom/',sample_wgan=F
     sample = parse_tfrecord(tfr_dataset,metadata,sample_wgan)
     # view_maps(sample)
     dataset = tfr_dataset.map(_parse_tfr_element)
-    train_set, validation_set, val_batches = partition_dataset(dataset,metadata['count'],batch_size)
+    train_set, validation_set = partition_dataset(dataset,metadata['count'],batch_size)
     # Returns a shuffled training set that is seperated into batches
-    return train_set, validation_set, val_batches, metadata['maps_meta'], sample
+    return train_set, validation_set, metadata['maps_meta'], sample
 
 
-def parse_tfrecord(record, meta, sample_wgan):
+def parse_tfrecord(record, meta, sample_wgan, file_path='../dataset/generated/doom/hybrid/sample.tfrecords'):
     # If adding the wgan generated maps as the sample
     if sample_wgan:
-        save_path = '../dataset/generated/doom/hybrid/'
-        file_path = save_path + 'sample.tfrecords'
         if not os.path.isfile(file_path):
             print('No dataset record found')
             sys.exit()
@@ -87,11 +81,10 @@ def partition_dataset(ds, ds_size, batch_size, train_split=5/6, val_split=1/6, s
         ds = ds.shuffle(ds_size*100, seed=12)
     
     train_size = int(train_split * ds_size)
-    val_batches = math.floor((ds_size-train_size)/batch_size)
     
     train_ds = ds.take(train_size)    
     val_ds = ds.skip(train_size)
-    return train_ds.batch(batch_size, drop_remainder=True), val_ds.batch(batch_size, drop_remainder=True), val_batches
+    return train_ds.batch(batch_size, drop_remainder=True), val_ds.batch(batch_size, drop_remainder=True)
 
 
 def normalize_maps(x, map_meta, map_names, use_sigmoid=True):
@@ -120,47 +113,6 @@ def rescale_maps(x, map_meta, map_names, use_sigmoid=True):
     return tf.math.round(((max-min) * (x - a)/(b-a)) + min_mat)
 
 
-def generate_loss_graph(loss, key, location = 'generated_maps/'):
-    for i in range(len(loss)):
-        plt.figure()
-        plt.xlabel('Number of Epochs') if 'validation' in key[i] else plt.xlabel('Number of Steps')
-        plt.ylabel('Loss')
-        plt.plot(loss[i])
-        if max(loss[i])>500:
-            plt.ylim(top=500)
-        # plt.legend() # must be after labels
-        plt.savefig(location + key[i] + '_loss_graph')
-        plt.close()
-
-
-def generate_images(model, seed, epoch, keys, is_p2p = False, is_trad=False, test_input = None, test_keys = None, meta = None):
-    prediction = model([test_input, seed], training=True) if is_p2p else model(seed, training=False)
-    n = 128
-    if is_p2p:
-        scaled_pred = rescale_maps(prediction,meta,keys)
-        for i in range(len(keys)):
-            essentials = scaled_pred[0,:,:,i] if i == 0 else tf.maximum(essentials, scaled_pred[0,:,:,i])
-        n = n/meta['essentials']['max']
-
-    title = test_keys + ['essentials'] if is_p2p else keys
-    display_list = [test_input[0,:,:,i] for i in range(len(test_keys))] + [essentials] if is_p2p else [prediction[0,:,:,i] for i in range(len(keys))]
-
-    plt.figure(figsize=(8, 8))
-    for i in range(len(title)):
-        plt.subplot(2, 2, i+1)
-        plt.title(title[i] if title[i] != 'essentials' else 'thingsmap')
-        if keys[i] in ['thingsmap','essentials']:
-            plt.imshow((display_list[i]*n)+(display_list[i]>0).astype(tf.float32)*127, cmap='gray') 
-        else:
-            plt.imshow(display_list[i], cmap='gray') 
-        plt.axis('off')
-    loc = 'generated_maps/hybrid/trad_pix2pix/' if is_trad else 'generated_maps/hybrid/pix2pix/' if is_p2p else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/'
-    if not os.path.exists(loc):
-        os.makedirs(loc)
-    plt.savefig(loc + 'image_at_epoch_{:04d}.png'.format(epoch))
-    plt.close()
-
-
 def _bytes_feature(value):
     """Returns a bytes_list from a string / byte."""
     if isinstance(value, type(tf.constant(0))): # if value is tensor
@@ -185,31 +137,3 @@ def generate_sample(imgs ,keys, save_path = '../dataset/generated/doom/', file_n
     file = save_path + 'meta.json'
     with open(file, 'w') as jsonfile:
         json.dump({'keys':keys}, jsonfile)
-
-
-def view_maps(sample):
-    plt.subplot(2, 4, 1)
-    plt.imshow(sample['floormap'], cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 2)
-    plt.imshow(sample['heightmap'], cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 3)
-    plt.imshow(sample['wallmap'], cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 4)
-    plt.imshow((sample['monsters']*75/19)+(sample['monsters']>0).astype(tf.float32)*180, cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 5)
-    plt.imshow((sample['ammunitions']*75/8)+(sample['ammunitions']>0).astype(tf.float32)*180, cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 6)
-    plt.imshow((sample['powerups']*75/6)+(sample['powerups']>0).astype(tf.float32)*180, cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 7)
-    plt.imshow((sample['artifacts']*75/9)+(sample['artifacts']>0).astype(tf.float32)*180, cmap='gray') 
-    plt.axis('off')
-    plt.subplot(2, 4, 8)
-    plt.imshow((sample['weapons']*75/7)+(sample['weapons']>0).astype(tf.float32)*180, cmap='gray') 
-    plt.axis('off')
-    plt.show()

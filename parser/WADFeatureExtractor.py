@@ -26,17 +26,16 @@ class WADFeatureExtractor(object):
         x_max = wad_features['x_max']-wad_features['x_min']
         y_max = wad_features['y_max']-wad_features['y_min']
         if pad:
-            pad_x = np.ceil((25000 - x_max)/250) if x_max/25000 < 1 else 0
-            pad_y = np.ceil((25000 - y_max)/250) if y_max/25000 < 1 else 0
             # Size -1 since indices are from 0 to 255
-            x = np.floor(((x_centered+pad_x) * (size[0]-1)) / (x_max+pad_x*2)).astype(np.int32)
-            y = np.floor(((y_centered+pad_y) * (size[1]-1)) / (y_max+pad_y*2)).astype(np.int32)
-        # else:
-        #     x = np.floor((x_centered * size[0]-1) / x_max).astype(np.int32)
-        #     y = np.floor((y_centered * size[1]-1) / y_max).astype(np.int32)
-
-        # x = np.floor(x_centered / factor).astype(np.int32)
-        # y = np.floor(y_centered / factor).astype(np.int32)
+            pad_x = np.ceil((10000 - x_max)/100) if x_max/10000 < 1 else np.floor((size[0]-1-x_max)/2) if x_max<55 else 0
+            pad_y = np.ceil((10000 - y_max)/100) if y_max/10000 < 1 else np.floor((size[1]-1-y_max)/2) if y_max<55 else 0
+            rescaled_x = x_centered*(size[0]-1-pad_x*2)/x_max
+            rescaled_y = y_centered*(size[1]-1-pad_y*2)/y_max
+            x = np.floor(rescaled_x + pad_x).astype(np.int32)
+            y = np.floor(rescaled_y + pad_y).astype(np.int32)
+        else:
+            x = np.floor((x_centered * size[0]-1)/x_max).astype(np.int32)
+            y = np.floor((y_centered * size[1]-1)/y_max).astype(np.int32)
         return x, y
 
 

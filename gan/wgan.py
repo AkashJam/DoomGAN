@@ -2,7 +2,9 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 import time, math, os
 from NetworkArchitecture import topological_maps, WGAN_gen, WGAN_disc
-from GanMeta import *
+from DataProcessing import normalize_maps, rescale_maps, generate_sample, read_record
+from NNMeta import generate_images, generate_loss_graph
+
 
 def upsample(filters, kernel, stride, apply_dropout=False):
     result = tf.keras.Sequential()
@@ -116,7 +118,7 @@ def train_step(real_images):
 
 
 def v_loss():
-    valid_c_loss = list()
+    valid_d_loss = list()
     valid_g_loss = list()
     for image_batch in validation_set:
         images = tf.stack([image_batch[m] for m in map_keys], axis=-1)
@@ -134,13 +136,12 @@ def v_loss():
 
                 d_cost = discriminator_loss(real_img=real_logits, fake_img=fake_logits)
                 gp = gradient_penalty(real_images, fake_images)
-                c_loss = d_cost + gp * gp_weight
+                d_loss = d_cost + gp * gp_weight
                 g_loss = generator_loss(fake_logits)
-                valid_c_loss.append(c_loss)
-                valid_g_loss.append(g_loss)
-                # print('g_loss: ', g_loss, ' c_loss :', c_loss)
+                valid_d_loss.append(abs(d_loss))
+                valid_g_loss.append(abs(g_loss))
         
-    return sum(valid_c_loss)/len(valid_c_loss),sum(valid_g_loss)/len(valid_g_loss)
+    return sum(valid_d_loss)/len(valid_d_loss),sum(valid_g_loss)/len(valid_g_loss)
 
 
 def train(epochs):
@@ -152,7 +153,7 @@ def train(epochs):
     # Start training
     for epoch in range(epochs):
         n = 0
-        start = time.time() 
+        start = time.time()
         for image_batch in training_set:
             images = tf.stack([image_batch[m] for m in map_keys], axis=-1)
             scaled_images = normalize_maps(images, map_meta, map_keys)
@@ -166,19 +167,17 @@ def train(epochs):
                     step_loss = train_step(x_batch)
                     critic_ts_loss.append(step_loss['d_loss'])
                     gen_ts_loss.append(step_loss['g_loss'])
-                    print ('Time for batch {} is {} sec'.format(n, time.time()-start))
+                    print ('Time for batch {} is {} sec. Disc loss: {} Gen loss: {}'.format(n, time.time()-start,step_loss['d_loss'],step_loss['g_loss']))
+                    if len(critic_ts_loss)%100 == 0:
+                        v_closs, v_gloss = v_loss()
+                        critic_vs_loss.append(v_closs)
+                        gen_vs_loss.append(v_gloss)
 
-        v_closs, v_gloss = v_loss()
-        critic_vs_loss = critic_vs_loss + [v_closs]
-        gen_vs_loss = gen_vs_loss + [v_gloss]
+        checkpoint.save(file_prefix = checkpoint_prefix)
+        loc = 'generated_maps/wgan/' if 'essentials' in map_keys else 'generated_maps/hybrid/wgan/'
+        generate_loss_graph(critic_ts_loss, critic_vs_loss, 'critic', location = loc)
+        generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', location = loc)
         generate_images(generator, seed, epoch + 1, map_keys)
-
-        # Save the model every 10 epochs
-        if (epoch + 1) % 5 == 0:
-            checkpoint.save(file_prefix = checkpoint_prefix)
-            loc = 'generated_maps/wgan/' if 'essentials' in map_keys else 'generated_maps/hybrid/wgan/'
-            generate_loss_graph([critic_ts_loss, gen_ts_loss], ['critic','gen'], location = loc)
-            generate_loss_graph([critic_vs_loss, gen_vs_loss], ['critic_validation','gen_validation'], location = loc)
 
 
         print ('Time for epoch {} is {} sec'.format(epoch + 1, time.time()-start))
@@ -194,13 +193,13 @@ def train(epochs):
 if __name__ == "__main__":
     batch_size = 16
     z_dim = 100
-    gen_items = True
-    gp_weight = 15
+    gen_items = False
+    gp_weight = 10
     discriminator_extra_steps = 3
     map_keys = topological_maps + ['essentials'] if gen_items else topological_maps
     map_no = len(map_keys)
 
-    training_set, validation_set, val_batches, map_meta, sample = read_record(batch_size = batch_size)
+    training_set, validation_set, map_meta, sample = read_record(batch_size = batch_size)
     generator = Generator(map_no,z_dim)
     discriminator = Discriminator()
     generator_optimizer = tf.keras.optimizers.Adam(2e-4)
@@ -210,4 +209,4 @@ if __name__ == "__main__":
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer, discriminator_optimizer=discriminator_optimizer, generator=generator, discriminator=discriminator)
 
-    train(101)
+    train(100)

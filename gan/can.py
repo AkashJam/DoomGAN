@@ -1,7 +1,9 @@
 import tensorflow as tf
 import time, os
 from NetworkArchitecture import topological_maps, object_maps, CAN_gen, CAN_disc
-from GanMeta import read_record, normalize_maps, generate_images, generate_loss_graph
+from DataProcessing import normalize_maps, read_record
+from NNMeta import generate_images, generate_loss_graph, training_metrics
+from eval_metrics.metrics import encoding_error, mat_entropy, objs_per_unit_area, oob_error
 
 def downsample(filters, kernel, stride, apply_batchnorm=True):
   initializer = tf.random_normal_initializer(0., 0.02)
@@ -134,32 +136,44 @@ def train_step(input_image, target):
                                                           "gan_loss": tf.abs(gen_gan_loss), "mask_loss": tf.abs(gen_mask_loss), 
                                                           "obj_loss": tf.abs(gen_obj_loss)}
 
-def v_loss():
+def v_loss(n_batches):
   v_gloss = list()
   v_dloss = list()
+  enc_arr = list()
+  ntp_arr = list()
+  oob_arr = list()
+  obj_arr =list()
   for image_batch in validation_set:
-    input = tf.stack([image_batch[m] for m in topological_maps], axis=-1)
-    target = tf.stack([image_batch[m] for m in object_maps], axis=-1)
-    x_input = normalize_maps(input, map_meta, topological_maps)
-    x_target = normalize_maps(target, map_meta, object_maps)
+    v_input = tf.stack([image_batch[m] for m in topological_maps], axis=-1)
+    v_target = tf.stack([image_batch[m] for m in object_maps], axis=-1)
+    x_input = normalize_maps(v_input, map_meta, topological_maps)
+    x_target = normalize_maps(v_target, map_meta, object_maps)
 
     noisy_img = tf.random.normal(shape=(batch_size, tf.shape(x_input)[1], tf.shape(x_input)[2], 1))
     gen_output = generator([x_input, noisy_img], training=True)
 
-    disc_real_output = discriminator([x_input, target], training=True)
-    disc_generated_output = discriminator([x_target, gen_output], training=True)
+    disc_real_output = discriminator([x_input, x_target], training=False)
+    disc_generated_output = discriminator([x_input, gen_output], training=False)
 
     if trad:
-      gen_total_loss, gen_gan_loss, gen_l1_loss = generator_loss(disc_generated_output, gen_output, target, x_input, LAMBDA=100)
+      gen_total_loss, gen_gan_loss, gen_l1_loss = generator_loss(disc_generated_output, gen_output, x_target, x_input, LAMBDA=100)
 
     else:
-      gen_total_loss, gen_gan_loss, gen_mask_loss, gen_obj_loss = generator_loss(disc_generated_output, gen_output, target, x_input)
+      gen_total_loss, gen_gan_loss, gen_mask_loss, gen_obj_loss = generator_loss(disc_generated_output, gen_output, x_target, x_input)
     disc_loss = discriminator_loss(disc_real_output, disc_generated_output)
-
     v_gloss.append(gen_total_loss)
     v_dloss.append(disc_loss)
-  
-  return sum(v_gloss)/len(v_gloss), sum(v_dloss)/len(v_dloss)
+
+    enc_arr.append(encoding_error(gen_output, map_meta))
+    ntp_arr.append(mat_entropy(gen_output, map_meta))
+    id = topological_maps.index('floormap')
+    oob_arr.append(oob_error(gen_output, x_input[:,:,:,id]))
+    obj_arr.append(objs_per_unit_area(gen_output, x_input[:,:,:,id]))
+  training_metrics(n_batches, trad, enc_arr, ntp_arr, oob_arr, obj_arr)
+
+  avg_gloss = sum(v_gloss)/len(v_gloss)
+  avg_dloss = sum(v_dloss)/len(v_dloss)
+  return  avg_gloss, avg_dloss
 
 
 def train(epochs):
@@ -182,19 +196,19 @@ def train(epochs):
       step_loss = train_step(x_input, x_target)
       disc_ts_loss.append(step_loss['d_loss'])
       gen_ts_loss.append(step_loss['g_loss'])
-      print ('Time for batch {} is {} sec'.format(n+1, time.time()-start))
+      print ('Time for batch {} is {} sec. d_loss: {} g_loss: {}'.format(n+1, time.time()-start,step_loss['d_loss'],step_loss['g_loss']))
+      total_batches = len(disc_ts_loss)
+      if total_batches%100 == 0:
+        v_dloss, v_gloss= v_loss(total_batches)
+        gen_vs_loss.append(v_gloss)
+        disc_vs_loss.append(v_dloss)
 
-    v_dloss, v_gloss = v_loss()
-    gen_vs_loss = gen_vs_loss + [v_gloss]
-    disc_vs_loss = disc_vs_loss + [v_dloss]
-    generate_images(generator, seed, epoch+1, object_maps, is_p2p=True, is_trad=trad, test_input=scaled_sample_input, meta=map_meta, test_keys=input_params)
-
-    if (epoch + 1) % 10 == 0:
+    if (epoch+1)%10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
-      loc = 'generated_maps/hybrid/trad_pix2pix/' if trad else 'generated_maps/hybrid/pix2pix/'
-      generate_loss_graph([disc_ts_loss, gen_ts_loss], ['disc','gen'], location = loc)
-      generate_loss_graph([disc_vs_loss, gen_vs_loss], ['disc_validation','gen_validation'], location = loc)
-
+    loc = 'generated_maps/hybrid/trad_pix2pix/' if trad else 'generated_maps/hybrid/pix2pix/'
+    generate_images(generator, seed, epoch+1, object_maps, is_p2p=True, is_trad=trad, test_input=scaled_sample_input, meta=map_meta, test_keys=topological_maps)
+    generate_loss_graph(disc_ts_loss, disc_vs_loss, 'discriminator', location = loc)
+    generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', location = loc)
     print ('Time for epoch {} is {} sec'.format(epoch+1, time.time()-start))
 
 if __name__ == "__main__":
@@ -214,4 +228,4 @@ if __name__ == "__main__":
     os.makedirs(checkpoint_dir+'/')
   checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
   checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer, discriminator_optimizer=discriminator_optimizer, generator=generator, discriminator=discriminator)
-  train(201)
+  train(100)

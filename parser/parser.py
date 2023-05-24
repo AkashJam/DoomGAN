@@ -1,9 +1,10 @@
 from WADEditor import WADReader
 import tensorflow as tf
 import os, json, sys, math
-from matplotlib import pyplot as plt
+from matplotlib import pyplot,colors,ticker
 import Dictionaries.ThingTypes as ThingTypes
 import numpy as np
+from skimage.morphology import label
 
 def read_json(scraped_path):
   json_path = scraped_path + 'doom.json'
@@ -22,8 +23,22 @@ def read_json(scraped_path):
   else:
     print('JSON not found')
     return None
+  
+def plot_dims(widths, heights):
+  fig, ax = pyplot.subplots(tight_layout=True)
+  pyplot.xlabel('Map Width in DOOM Units')
+  pyplot.ylabel('Map Length in DOOM Units')
+  sdh = ax.hexbin(widths, heights, gridsize=20, cmap='viridis_r', mincnt=1)
+  bar = fig.colorbar(sdh)
+  # bar.formatter.set_useOffset(True)
+  # hist = ax.hist2d(maps_width, maps_height, bins=50, norm=colors.LogNorm())
+  ax.set_xlim([0,20000])
+  ax.set_ylim([0,20000])
+  pyplot.show()
 
 def parse_wads(wad_ids, dataset_path):
+  maps_height = list()
+  maps_width = list()
   feature_maps = list()
   reader = WADReader()
   valid_dataset = list()
@@ -39,8 +54,11 @@ def parse_wads(wad_ids, dataset_path):
           if wad_with_features is not None and not wad_with_features['wad']['exception']:
             levels = wad_with_features["levels"]
             features = levels[0]["features"]
-            if features["has_teleporters"] and features["number_of_monsters"]>0 and features["number_of_weapons"]>0 and features["start_location_x_px"] != -1 and features["start_location_y_px"] != -1:
-              # Adding extracted features with the map
+            sections, floors = label(levels[0]["maps"]["floormap"], connectivity=2, return_num=True)
+            if floors <=2 and features["number_of_monsters"]>0 and features["number_of_weapons"]>0:
+              # pyplot.imshow(map)
+              # pyplot.show()
+              # Adding extracted features with the map 1495 without floor check, 693 with floor = 1 , 949 with floor <=2
               # feature_map = levels[0]["maps"]
               # feature_map.update(levels[0]["features"])
               # feature_maps.append(feature_map)
@@ -49,10 +67,14 @@ def parse_wads(wad_ids, dataset_path):
               feature_maps.append(levels[0]["maps"])
               valid_dataset.append({'id':id, 'name':file})
               print('added level', id, 'from', file)
+              maps_height.append(features['x_max']-features['x_min'])
+              maps_width.append(features['y_max']-features['y_min'])
               break
         except:
           print('failed to add level', id, 'from', file)
-    # if len(valid_dataset) >= 12: break
+    # if len(valid_dataset) >= 10: break
+  plot_dims(maps_width, maps_height)
+  print(len(maps_height))
   return feature_maps, valid_dataset, maps_meta
 
 def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
@@ -152,8 +174,8 @@ def doom_parser(wads_path,keys,cate,save_path):
     sys.exit()
   wad_ids = read_json(wads_path)
   feature_maps, wad_list, meta = parse_wads(wad_ids, wads_path)
-  generate_tfrecord(feature_maps,keys,cate,save_path)
-  metadata_gen(wad_list,keys,cate,save_path,meta,graphics["meta"])
+  # generate_tfrecord(feature_maps,keys,cate,save_path)
+  # metadata_gen(wad_list,keys,cate,save_path,meta,graphics["meta"])
 
 
 dataset_path = '../dataset/scraped/doom/'

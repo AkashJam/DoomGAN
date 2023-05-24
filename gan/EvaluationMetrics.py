@@ -1,13 +1,34 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from pix2pix import Generator as pix2pixGen
+from can import Generator as canGen
 from wgan import Generator as wganGen
 from HybridGen import hybrid_fmaps
 from WganGen import wgan_fmaps
-from GanMeta import read_record
-import ripleyk, math
-from skimage import morphology
+from DataProcessing import read_record
+import os, json
+from NetworkArchitecture import topological_maps, object_maps
+from eval_metrics.metrics import level_props, calc_RipleyK
+
+
+def plot_train_metrics(save_path = 'eval_metrics/'):
+    file_path = save_path + 'training_metrics.json'
+    if not os.path.isfile(file_path):
+        print('No metric record found')
+    else:
+        with open(file_path, 'r') as jsonfile:
+            metrics = json.load(jsonfile)
+            CAN_types = list(metrics.keys())
+            for key in list(metrics[CAN_types[0]].keys()):
+                for CAN_type in CAN_types:
+                    steps = [stp*100 for stp in list(range(len(metrics[CAN_type][key])))]
+                    plt.xlabel('Number of Steps')
+                    plt.ylabel(key)
+                    plt.plot(steps, metrics[CAN_type][key] , label=CAN_type)
+                plt.legend(loc="upper right")
+                # plt.show()
+                plt.savefig(save_path + key + '_graph')
+                plt.close()
 
 
 def plot_prop_graph(props):
@@ -32,68 +53,51 @@ def plot_prop_graph(props):
     ax.legend()
     ax.set_ylim(0, 100)
     plt.show()
+    # plt.savefig('./eval_metrics/props')
+    # plt.close()
 
 
 def calc_proportions(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
-    real_props = dict()
-    wgan_props = dict()
-    hybrid_trad_props = dict()
-    hybrid_mod_props = dict()
-    obj_cate = ['monsters','ammunitions','powerups','artifacts','weapons']
-    id = keys.index('essentials')
-    for i in range(real.shape[0]):
-        for cate in obj_cate:
-            min = meta[cate]['min']
-            max = meta[cate]['max']
-            real_map_props = tf.reduce_sum(tf.cast(tf.logical_and(real[i,:,:,id]>min,real[i,:,:,id]<=max),tf.float16)) / tf.reduce_sum(tf.cast(real[i,:,:,id]>0,tf.float16)) if tf.reduce_sum(tf.cast(real[i,:,:,id]>0,tf.float16)) > 0 else 0
-            wgan_map_props = tf.reduce_sum(tf.cast(tf.logical_and(wgan[i,:,:,id]>min,wgan[i,:,:,id]<=max),tf.float16)) / tf.reduce_sum(tf.cast(wgan[i,:,:,id]>0,tf.float16)) if tf.reduce_sum(tf.cast(wgan[i,:,:,id]>0,tf.float16)) > 0 else 0
-            hybrid_trad_map_props = tf.reduce_sum(tf.cast(tf.logical_and(hybrid_trad[i,:,:,id]>min,hybrid_trad[i,:,:,id]<=max),tf.float16)) / tf.reduce_sum(tf.cast(hybrid_trad[i,:,:,id]>0,tf.float16)) if tf.reduce_sum(tf.cast(hybrid_trad[i,:,:,id]>0,tf.float16)) > 0 else 0
-            hybrid_mod_map_props = tf.reduce_sum(tf.cast(tf.logical_and(hybrid_mod[i,:,:,id]>min,hybrid_mod[i,:,:,id]<=max),tf.float16)) / tf.reduce_sum(tf.cast(hybrid_mod[i,:,:,id]>0,tf.float16))  if tf.reduce_sum(tf.cast(hybrid_mod[i,:,:,id]>0,tf.float16)) > 0 else 0
-            if i == 0:
-                real_props[cate] = [real_map_props]
-                wgan_props[cate] = [wgan_map_props]
-                hybrid_mod_props[cate] = [hybrid_mod_map_props]
-                hybrid_trad_props[cate] = [hybrid_trad_map_props]
-            else:
-                real_props[cate].append(real_map_props)
-                wgan_props[cate].append(wgan_map_props)
-                hybrid_mod_props[cate].append(hybrid_mod_map_props)
-                hybrid_trad_props[cate].append(hybrid_trad_map_props)
+    real_props = level_props(real, keys, meta, test_size)
+    wgan_props = level_props(wgan, keys, meta, test_size)
+    hybrid_trad_props = level_props(hybrid_trad, keys, meta, test_size)
+    hybrid_mod_props = level_props(hybrid_mod, keys, meta, test_size)
 
-    proportions = {'Real': tuple(round(100*sum(real_props[cate])/len(real_props[cate])) for cate in obj_cate), 
-                    'WGAN': tuple(round(100*sum(wgan_props[cate])/len(wgan_props[cate])) for cate in obj_cate), 
-                    'Hybrid - Trad CAN': tuple(round(100*sum(hybrid_trad_props[cate])/len(hybrid_trad_props[cate])) for cate in obj_cate),
-                    'Hybrid - Mod CAN': tuple(round(100*sum(hybrid_mod_props[cate])/len(hybrid_mod_props[cate])) for cate in obj_cate)} 
+    proportions = {'Real': tuple(round(100*sum(real_props[cate])/len(real_props[cate])) for cate in object_maps), 
+                    'WGAN': tuple(round(100*sum(wgan_props[cate])/len(wgan_props[cate])) for cate in object_maps), 
+                    'Hybrid - Trad CAN': tuple(round(100*sum(hybrid_trad_props[cate])/len(hybrid_trad_props[cate])) for cate in object_maps),
+                    'Hybrid - Mod CAN': tuple(round(100*sum(hybrid_mod_props[cate])/len(hybrid_mod_props[cate])) for cate in object_maps)} 
     plot_prop_graph(proportions)
 
 
 def calc_stats(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
-    obj_cate = ['monsters','ammunitions','powerups','artifacts','weapons']
     id = keys.index('essentials')
     n_items = meta['essentials']['max']
     real_count = [tf.where(real[:,:,:,id]==i+1).shape[0]/real.shape[0] for i in range(n_items)]
     wgan_count = [tf.where(wgan[:,:,:,id]==i+1).shape[0]/wgan.shape[0] for i in range(n_items)]
     hybrid_trad_count = [tf.where(hybrid_trad[:,:,:,id]==i+1).shape[0]/hybrid_trad.shape[0] for i in range(n_items)]
     hybrid_mod_count = [tf.where(hybrid_mod[:,:,:,id]==i+1).shape[0]/hybrid_mod.shape[0] for i in range(n_items)]
-    for cate in obj_cate:
+    for cate in object_maps:
         min = meta[cate]['min']
         max = meta[cate]['max']
-        real_cate = [0] + real_count[min:max]
-        wgan_cate = [0] + wgan_count[min:max]
-        hybrid_trad_cate = [0] + hybrid_trad_count[min:max]
-        hybrid_mod_cate = [0] + hybrid_mod_count[min:max]
+        real_cate = real_count[min:max]
+        wgan_cate = wgan_count[min:max]
+        hybrid_trad_cate = hybrid_trad_count[min:max]
+        hybrid_mod_cate = hybrid_mod_count[min:max]
         fig, ax = plt.subplots(1, 1)
         plt.xlabel(cate + ' type')
         plt.ylabel('Average object population')
-        plt.plot(real_cate, label = "Real")
-        plt.plot(wgan_cate, label = "WGAN")
-        plt.plot(hybrid_trad_cate, label = "Hybrid-Trad CAN")
-        plt.plot(hybrid_mod_cate, label = "Hybrid-Mod CAN")
+        plt.plot(list(range(1,max-min+1)), real_cate, label = "Real")
+        plt.plot(list(range(1,max-min+1)), wgan_cate, label = "WGAN")
+        plt.plot(list(range(1,max-min+1)), hybrid_trad_cate, label = "Hybrid-Trad CAN")
+        plt.plot(list(range(1,max-min+1)), hybrid_mod_cate, label = "Hybrid-Mod CAN")
         ax.set_xlim(1, max-min)
         if cate == 'monsters': ax.set_ylim(0, 80)
         ax.xaxis.get_major_locator().set_params(integer=True)
         plt.legend() # must be after labels
-        plt.show()
+        # plt.show()
+        plt.savefig('./eval_metrics/'+cate+'_count')
+        plt.close()
 
 
 def sliding_window_slicing(a, no_items, item_type=0):
@@ -137,15 +141,7 @@ def calc_spatial_homogenity(maps,threshold=1,gen=True):
     things_id = keys.index('essentials')
     position = [n for n in range(256)]
     for i in range(maps.shape[0]):
-        if gen:
-            map_size = np.sum((maps[i,:,:,floor_id]>0).astype(int))
-            map = morphology.remove_small_holes(maps[i,:,:,floor_id]>0,24)
-            map = morphology.remove_small_objects(map,map_size/2).astype(int)
-        else:
-            map = (maps[i,:,:,floor_id]>0).astype(int)
-        if np.sum(map)==0:
-            print('next map')
-            continue
+        map = (maps[i,:,:,floor_id]>0).astype(int)
         empty_space = np.logical_and(np.logical_not(maps[i,:,:,things_id]>0),map).astype(int)
         x_min = max(position, key= lambda x: map[x,:].any()*(256-x))
         x_max = max(position, key= lambda x: map[x,:].any()*x)
@@ -186,52 +182,15 @@ def calc_spatial_homogenity(maps,threshold=1,gen=True):
         # plt.imshow(cropped_empty_space)
         # plt.subplot(1,2,2)
         # plt.imshow(cropped_map)
-        # plt.show()
-
-# def plot_spac_homogenity():
-
-
-    
-
-
-def calc_RipleyK(maps, radii,gen=True):
-    floor_id = keys.index('floormap')
-    things_id = keys.index('essentials')
-    position = [n for n in range(256)]
-    for i in range(maps.shape[0]):
-        if gen:
-            map_size = np.sum((maps[i,:,:,floor_id]>0).astype(int))
-            map = morphology.remove_small_holes(maps[i,:,:,floor_id]>0,24)
-            map = morphology.remove_small_objects(map,map_size/3).astype(int)
-        else:
-            map = (maps[i,:,:,floor_id]>0).astype(int)
-        f_area = np.sum(map)
-        if f_area==0:
-            continue
-        x_min = max(position, key= lambda x: map[x,:].any()*(256-x))
-        x_max = max(position, key= lambda x: map[x,:].any()*x)
-        y_min = max(position, key= lambda y: map[:,y].any()*(256-y))
-        y_max = max(position, key= lambda y: map[:,y].any()*y)
-        samples = np.transpose(np.nonzero(maps[i,:,:,things_id]*map))
-        rescaled_x = 2*(samples[:,0]-x_min-(x_max-x_min)/2)/(x_max-x_min)
-        rescaled_y = 2*(samples[:,1]-y_min-(y_max-y_min)/2)/(y_max-y_min)
-        if len(rescaled_x) == 0 or len(rescaled_y) == 0:
-            continue
-        for j,r in enumerate(radii):
-            k = ripleyk.calculate_ripley(r, 1, d1=rescaled_x, d2=rescaled_y, boundary_correct=True, CSR_Normalise=True)
-            ripk = [k] if j == 0 else ripk + [k]
-        area = (x_max-x_min)*(y_max-y_min)
-        level_areas = [f_area/area] if i == 0 else level_areas + [f_area/area]
-        level_ripk = [ripk] if i == 0 else level_ripk + [ripk]
-    return level_areas, level_ripk
+        # plt.show()    
 
 
 def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):  
     test_radii = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]               
-    rlevel_areas, rlevel_ripk = calc_RipleyK(real, test_radii,gen=False)
-    wlevel_areas, wlevel_ripk = calc_RipleyK(wgan, test_radii)
-    htlevel_areas, htlevel_ripk = calc_RipleyK(hybrid_trad, test_radii)
-    hmlevel_areas, hmlevel_ripk = calc_RipleyK(hybrid_mod, test_radii)
+    rlevel_areas, rlevel_ripk = calc_RipleyK(real, keys, test_size, test_radii)
+    wlevel_areas, wlevel_ripk = calc_RipleyK(wgan, keys, test_size, test_radii)
+    htlevel_areas, htlevel_ripk = calc_RipleyK(hybrid_trad, keys, test_size, test_radii)
+    hmlevel_areas, hmlevel_ripk = calc_RipleyK(hybrid_mod, keys, test_size, test_radii)
     
     # accr_ripk = [np.array([ripk[i] for ripk in rlevel_ripk]) * np.array(rlevel_areas) for i in range(len(test_radii))]
     # acch_ripk = [np.array([ripk[i] for ripk in hlevel_ripk]) * np.array(hlevel_areas) for i in range(len(test_radii))]
@@ -249,31 +208,39 @@ def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):
                                                 [sum([ripk[i] for ripk in hmlevel_ripk])/len(hmlevel_areas) for i in range(len(test_radii))]))
     
     for i,r in enumerate(test_radii):
-        # plt.plot(radii, np.array(rlevel_ripk).T.tolist(), 'bo')
+
+        real_ripk = [ripk[i] for ripk in rlevel_ripk]
+        wgan_ripk = [ripk[i] for ripk in wlevel_ripk]
+        trad_can_ripk = [ripk[i] for ripk in htlevel_ripk]
+        mod_can_ripk = [ripk[i] for ripk in hmlevel_ripk]
+        level_ripk = [real_ripk, wgan_ripk, trad_can_ripk, mod_can_ripk]
+        labels = ['Real', 'WGAN', 'Hybrid - Trad CAN', 'Hybrid - Mod CAN']
+
+        fig = plt.figure(figsize=(10,6))
+        fig.subplots(1, 4, sharey=True)
+        # plt.ylabel('Probability')
+        # plt.xlabel('Ripley K with radius '+ str(r))
+        for i,ripk in enumerate(level_ripk):
+            plt.subplot(1,4,i+1)
+            n = len(ripk)
+            IQR = np.percentile(ripk, 75) - np.percentile(ripk, 25)
+            bin_width = 2*IQR*n**(-1/3)
+            n_bins = round((max(ripk) - min(ripk)) / bin_width)
+            plt.hist(ripk, bins=n_bins)
+            plt.title(labels[i])
+
+        fig.text(0.5, 0.05, 'Ripley K with radius '+ str(r), ha="center", va="center")
+        fig.text(0.08, 0.5, "Count", ha="center", va="center", rotation=90)
+        # fig.tight_layout(pad=0.4)
         # plt.show()
-        plt.figure(figsize=(16, 8))
-        plt.xlabel('Percentage of Covered Area')
-        plt.ylabel('Ripley K with radius '+ str(r))
-        ax1 = plt.subplot(2, 2, 1)
-        plt.plot(rlevel_areas, [ripk[i] for ripk in rlevel_ripk], 'bo', label='Real')
-        # ax1.set_ylim(-0.5, 2.5)
-        ax2 = plt.subplot(2, 2, 2)
-        plt.plot(wlevel_areas, [ripk[i] for ripk in wlevel_ripk], 'ro', label='Wgan')
-        # ax2.set_ylim(-0.5, 2.5)
-        ax3 = plt.subplot(2, 2, 3)
-        plt.plot(htlevel_areas, [ripk[i] for ripk in htlevel_ripk], 'rx', label='Hybrid-Trad CAN')
-        # ax3.set_ylim(-0.5, 2.5)
-        ax4 = plt.subplot(2, 2, 4)
-        plt.plot(hmlevel_areas, [ripk[i] for ripk in hmlevel_ripk], 'bx', label='Hybrid-Mod CAN')
-        # ax4.set_ylim(-0.5, 2.5)
-        plt.show()
-
-
+        plt.savefig('./eval_metrics/ripk'+str(int(r*10)))
+        plt.close()
 
 
 if __name__ == "__main__":
     b_size = 100
     z_dim = 100
+    test_size = 100
 
     trad_wgen = wganGen(4, z_dim)
     checkpoint_dir = './training_checkpoints/wgan'
@@ -285,32 +252,34 @@ if __name__ == "__main__":
     checkpoint = tf.train.Checkpoint(generator=hybrid_wgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
-    hybrid_pgen = pix2pixGen()
+    hybrid_cgen = canGen(len(topological_maps),len(object_maps))
     checkpoint_dir = './training_checkpoints/hybrid/pix2pix'
-    checkpoint = tf.train.Checkpoint(generator=hybrid_pgen)
+    checkpoint = tf.train.Checkpoint(generator=hybrid_cgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
-    hybrid_trad_pgen = pix2pixGen()
+    hybrid_trad_cgen = canGen(len(topological_maps),len(object_maps))
     checkpoint_dir = './training_checkpoints/hybrid/trad_pix2pix'
-    checkpoint = tf.train.Checkpoint(generator=hybrid_trad_pgen)
+    checkpoint = tf.train.Checkpoint(generator=hybrid_trad_cgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
-    dataset, map_meta, sample = read_record(batch_size=b_size)
-    for i, data in dataset.enumerate().as_numpy_iterator():
+    training_set, validation_set, map_meta, sample= read_record(batch_size=b_size)
+    for i, data in training_set.enumerate().as_numpy_iterator():
         z = tf.random.normal([b_size, z_dim])
         noise = tf.random.normal([b_size, 256, 256, 1])
-        wgan_maps, keys, n_items = wgan_fmaps(trad_wgen, z)
-        hybrid_trad_maps, keys, n_items = hybrid_fmaps(hybrid_wgen, hybrid_trad_pgen, z, noise)
-        hybrid_maps, keys, n_items = hybrid_fmaps(hybrid_wgen, hybrid_pgen, z, noise)
+        wgan_maps, keys, n_items = wgan_fmaps(trad_wgen, z, map_meta)
+        hybrid_trad_maps, keys, n_items = hybrid_fmaps(hybrid_wgen, hybrid_trad_cgen, z, noise, map_meta)
+        hybrid_maps, keys, n_items = hybrid_fmaps(hybrid_wgen, hybrid_cgen, z, noise, map_meta)
         real_maps = np.stack([data[m] for m in keys], axis=-1)
         r_maps = np.concatenate((r_maps,real_maps), axis=0) if i != 0 else real_maps
         w_maps = np.concatenate((w_maps,wgan_maps.numpy()), axis=0) if i != 0 else wgan_maps.numpy()
         ht_maps = np.concatenate((ht_maps,hybrid_trad_maps.numpy()), axis=0) if i != 0 else hybrid_trad_maps.numpy()
         hm_maps = np.concatenate((hm_maps,hybrid_maps.numpy()), axis=0) if i != 0 else hybrid_maps.numpy()
+        if i==2: break
     # calc_spatial_homogenity(w_maps)
-    # calc_proportions(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
-    # calc_stats(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
+    calc_proportions(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
+    calc_stats(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
     plot_RipleyK(r_maps,w_maps,ht_maps,hm_maps)
+    plot_train_metrics()
     
     
 
