@@ -27,8 +27,8 @@ class WADFeatureExtractor(object):
         y_max = wad_features['y_max']-wad_features['y_min']
         if pad:
             # Size -1 since indices are from 0 to 255
-            pad_x = np.ceil((10000 - x_max)/100) if x_max/10000 < 1 else np.floor((size[0]-1-x_max)/2) if x_max<55 else 0
-            pad_y = np.ceil((10000 - y_max)/100) if y_max/10000 < 1 else np.floor((size[1]-1-y_max)/2) if y_max<55 else 0
+            pad_x = np.ceil((15000 - x_max)/150) if x_max/15000 < 1 else np.floor((size[0]-1-x_max)/2) if x_max<55 else 0
+            pad_y = np.ceil((15000 - y_max)/150) if y_max/15000 < 1 else np.floor((size[1]-1-y_max)/2) if y_max<55 else 0
             rescaled_x = x_centered*(size[0]-1-pad_x*2)/x_max
             rescaled_y = y_centered*(size[1]-1-pad_y*2)/y_max
             x = np.floor(rescaled_x + pad_x).astype(np.int32)

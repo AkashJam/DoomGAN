@@ -161,7 +161,6 @@ all_types= [i['int'] for i in all_things] # Contains the list of Thing types id 
 essentials = list()
 for category in ['monsters', 'ammunitions', 'powerups', 'artifacts', 'weapons']:
     essentials += things[category]
-# essentials += [things['other'][2]]
 essentials= [i['int'] for i in essentials]
 
 def get_all_categories():
@@ -207,12 +206,13 @@ def get_type_id_from_index(index, essential = False):
     """
     if essential:
         if index < 1 or index > len(essentials):
-            return None
+            return 0
         return essentials[index-1]
     else:
         if index < 1 or index > len(all_things):
-            return None
+            return 0
         return all_things[index-1]
+    
 
 def get_index_from_type_id(thing_type,essential=False):
     """
@@ -227,7 +227,7 @@ def get_index_from_type_id(thing_type,essential=False):
             return essentials.index(thing_type)+1
     else:
         if thing_type not in all_types:
-            return None
+            return 0
         else:
             return all_types.index(thing_type)+1
 

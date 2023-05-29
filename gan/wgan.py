@@ -15,6 +15,7 @@ def upsample(filters, kernel, stride, apply_dropout=False):
     result.add(tf.keras.layers.LeakyReLU())
     return result
 
+
 def downsample(filters, kernel, stride, use_norm = True):
     result = tf.keras.Sequential()
     result.add(tf.keras.layers.Conv2D(filters, kernel, strides=stride, padding='same'))
@@ -30,25 +31,19 @@ def Generator(n_maps, noise_dim):
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU()(x)
     x = tf.keras.layers.Reshape((8, 8, 128))(x)
-
     for layer in WGAN_gen:
         x = upsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['dropout'])(x)
-
     x = tf.keras.layers.Conv2DTranspose(n_maps, (4, 4), strides=(2, 2), padding='same', use_bias=False, activation='sigmoid')(x)
-
     return tf.keras.Model(inputs=noise, outputs=x)
 
 
 def Discriminator():
     input_img = tf.keras.layers.Input(shape=[256, 256, map_no])
     x = input_img
-
     for layer in WGAN_disc:
         x = downsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['norm'])(x)
-    
     x = tf.keras.layers.Flatten()(x)
     x = tf.keras.layers.Dense(1)(x)
-    
     return tf.keras.Model(inputs=input_img, outputs=x)
 
 
@@ -80,9 +75,6 @@ def gradient_penalty(real_images, fake_images):
 
 # Return the generator and discriminator losses as a loss dictionary
 def train_step(real_images):
-    if isinstance(real_images, tuple):
-        real_images = real_images[0]
-
     for i in range(discriminator_extra_steps):
         random_latent_vectors = tf.random.normal(shape=(batch_size, z_dim))
         with tf.GradientTape() as tape:
@@ -140,8 +132,10 @@ def v_loss():
                 g_loss = generator_loss(fake_logits)
                 valid_d_loss.append(abs(d_loss))
                 valid_g_loss.append(abs(g_loss))
+    avg_d_loss = sum(valid_d_loss)/len(valid_d_loss)
+    avg_g_loss = sum(valid_g_loss)/len(valid_g_loss)
         
-    return sum(valid_d_loss)/len(valid_d_loss),sum(valid_g_loss)/len(valid_g_loss)
+    return avg_d_loss, avg_g_loss
 
 
 def train(epochs):
@@ -175,11 +169,9 @@ def train(epochs):
 
         checkpoint.save(file_prefix = checkpoint_prefix)
         loc = 'generated_maps/wgan/' if 'essentials' in map_keys else 'generated_maps/hybrid/wgan/'
-        generate_loss_graph(critic_ts_loss, critic_vs_loss, 'critic', location = loc)
-        generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', location = loc)
+        generate_loss_graph(critic_ts_loss, critic_vs_loss, 'critic', model, location = loc)
+        generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', model, location = loc)
         generate_images(generator, seed, epoch + 1, map_keys)
-
-
         print ('Time for epoch {} is {} sec'.format(epoch + 1, time.time()-start))
     
     # Generating sample to view in pix2pix
@@ -193,7 +185,8 @@ def train(epochs):
 if __name__ == "__main__":
     batch_size = 16
     z_dim = 100
-    gen_items = False
+    gen_items = True
+    model = "Traditional WGAN" if gen_items else "Hybrid WGAN"
     gp_weight = 10
     discriminator_extra_steps = 3
     map_keys = topological_maps + ['essentials'] if gen_items else topological_maps
@@ -206,6 +199,8 @@ if __name__ == "__main__":
     discriminator_optimizer = tf.keras.optimizers.Adam(2e-4)
 
     checkpoint_dir = './training_checkpoints/wgan' if 'essentials' in map_keys else './training_checkpoints/hybrid/wgan'
+    if not os.path.exists(checkpoint_dir+'/'):
+        os.makedirs(checkpoint_dir+'/')
     checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
     checkpoint = tf.train.Checkpoint(generator_optimizer=generator_optimizer, discriminator_optimizer=discriminator_optimizer, generator=generator, discriminator=discriminator)
 

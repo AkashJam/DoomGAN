@@ -1,5 +1,6 @@
 import tensorflow as tf
 from matplotlib import pyplot as plt
+import os
 from can import Generator as canGen
 from wgan import Generator as wganGen
 from NetworkArchitecture import topological_maps, object_maps
@@ -7,6 +8,8 @@ from DataProcessing import generate_sample, read_json, rescale_maps, parse_tfrec
 from NNMeta import view_maps
 import numpy as np
 from skimage import morphology
+from tensorflow.python.ops.numpy_ops import np_config
+np_config.enable_numpy_behavior()
 
 def hybrid_fmaps(wgan_model, can_model, seed, noisy_img, meta, use_sample=False, level_layout=None):
     if not use_sample:
@@ -50,6 +53,7 @@ if __name__ == "__main__":
     batch_size = 1
     z_dim = 100
     trad = False
+    use_sample = False
     z = tf.random.normal([batch_size, z_dim])
     noisy_img = tf.random.normal([batch_size, 256, 256, 1])
     n_tmaps = len(topological_maps)
@@ -62,30 +66,35 @@ if __name__ == "__main__":
     checkpoint = tf.train.Checkpoint(generator=wgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
     
-    use_sample = False
-    tfr_dataset = tf.data.TFRecordDataset('../dataset/generated/doom/wgan/test.tfrecords')
-    sample_input = parse_tfrecord(tfr_dataset,topological_maps+['essentials'],sample_wgan=True,file_path='../dataset/generated/doom/wgan/test.tfrecords')
-    level_maps = tf.stack([sample_input[m] for m in topological_maps], axis=-1).reshape(1, 256, 256, len(topological_maps))
-    level_maps = tf.cast(level_maps,tf.float32)
-    level_maps = normalize_maps(level_maps,meta['maps_meta'],topological_maps)
 
     if trad:
         cgen = canGen(n_tmaps,n_omaps)
-        checkpoint_dir = './training_checkpoints/hybrid/trad_pix2pix'
+        checkpoint_dir = './training_checkpoints/hybrid/trad_can'
         checkpoint = tf.train.Checkpoint(generator=cgen)
         checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
     else:
         cgen = canGen(n_tmaps,n_omaps)
-        checkpoint_dir = './training_checkpoints/hybrid/pix2pix'
+        checkpoint_dir = './training_checkpoints/hybrid/mod_can'
         checkpoint = tf.train.Checkpoint(generator=cgen)
         checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
+    if use_sample:
+        tfr_dataset = tf.data.TFRecordDataset('../dataset/generated/doom/wgan/test.tfrecords')
+        sample_input = parse_tfrecord(tfr_dataset,topological_maps+['essentials'],sample_wgan=True,file_path='../dataset/generated/doom/wgan/test.tfrecords')
+        level_maps = tf.stack([sample_input[m] for m in topological_maps], axis=-1).reshape(1, 256, 256, len(topological_maps))
+        level_maps = tf.cast(level_maps,tf.float32)
+        level_maps = normalize_maps(level_maps,meta['maps_meta'],topological_maps)
+        feature_maps, feature_keys = hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'], use_sample=True, level_layout=level_maps) 
+    else: 
+        feature_maps, feature_keys = hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'])
+
     
 
-    feature_maps, feature_keys = hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'], use_sample=True, level_layout=level_maps) if use_sample else hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'])
     view_maps(feature_maps, feature_keys, meta['maps_meta'], split_objs=False)
 
     loc = '../dataset/generated/doom/hybrid/'
-    path = loc + 'trad_pix/' if trad else loc + 'mod_pix/'
-    generate_sample(feature_maps, feature_keys, save_path=loc, file_name = 'test.tfrecords')
+    path = loc + 'trad_can/' if trad else loc + 'mod_can/'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    # generate_sample(feature_maps, feature_keys, save_path=loc, file_name = 'test.tfrecords')
     print('created sample level record')

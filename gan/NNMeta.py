@@ -1,11 +1,9 @@
 import tensorflow as tf
 import os, json, random
 from matplotlib import pyplot as plt
-from NetworkArchitecture import object_maps
+from NetworkArchitecture import topological_maps, object_maps
 from DataProcessing import rescale_maps
-# Used for image operations on tensor
-# from tensorflow.python.ops.numpy_ops import np_config
-# np_config.enable_numpy_behavior()
+
 
 def training_metrics(count, trad, enc, ntp, oob, obj, save_path="eval_metrics/"):
     mets = [sum(ntp)/len(ntp), sum(enc)/len(enc), sum(oob)/len(oob), sum(obj)/len(obj)]
@@ -26,35 +24,42 @@ def training_metrics(count, trad, enc, ntp, oob, obj, save_path="eval_metrics/")
         json.dump(metrics, jsonfile)
 
 
-def generate_images(model, seed, epoch, keys, is_p2p = False, is_trad=False, test_input = None, test_keys = None, meta = None):
-    prediction = model([test_input, seed], training=True) if is_p2p else model(seed, training=False)
-    n = 128
-    if is_p2p:
+def generate_images(model, seed, epoch, keys, is_can = False, is_trad=False, test_input = None, meta = None):
+    prediction = model([test_input, seed], training=True) if is_can else model(seed, training=False)
+    if is_can:
         scaled_pred = rescale_maps(prediction,meta,keys)
         for i in range(len(keys)):
             essentials = scaled_pred[0,:,:,i] if i == 0 else tf.maximum(essentials, scaled_pred[0,:,:,i])
-        n = n/meta['essentials']['max']
-
-    title = test_keys + ['essentials'] if is_p2p else keys
-    display_list = [test_input[0,:,:,i] for i in range(len(test_keys))] + [essentials] if is_p2p else [prediction[0,:,:,i] for i in range(len(keys))]
+    display_list = [test_input[0,:,:,i] for i in range(len(topological_maps))] + [essentials] if is_can else [prediction[0,:,:,i] for i in range(len(keys))]
 
     plt.figure(figsize=(8, 8))
-    for i in range(len(title)):
+    for i in range(len(display_list)):
         plt.subplot(2, 2, i+1)
-        plt.title(title[i] if title[i] != 'essentials' else 'thingsmap')
-        if keys[i] in ['thingsmap','essentials']:
-            plt.imshow((display_list[i]*n)+(display_list[i]>0).astype(tf.float32)*127, cmap='gray') 
+        if keys[i] == 'essentials':
+            plt.imshow((display_list[i]*2)+(display_list[i]>0).astype(tf.float32)*155, cmap='gray') 
         else:
             plt.imshow(display_list[i], cmap='gray') 
         plt.axis('off')
-    loc = 'generated_maps/hybrid/trad_pix2pix/' if is_trad else 'generated_maps/hybrid/pix2pix/' if is_p2p else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/'
+    loc = 'generated_maps/hybrid/trad_can/' if is_trad else 'generated_maps/hybrid/mod_can/' if is_can else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/'
     if not os.path.exists(loc):
         os.makedirs(loc)
     plt.savefig(loc + 'image_at_epoch_{:04d}.png'.format(epoch))
     plt.close()
 
 
-def generate_loss_graph(train_loss, valid_loss, key, sfactor = 10, location = 'generated_maps/'):
+def generate_loss_graph(train_loss, valid_loss, key, model, sfactor = 10, location = 'generated_maps/', met_path = "eval_metrics/"):
+    file_path = met_path + 'training_metrics.json'
+    metrics = dict()
+    if os.path.isfile(file_path):
+        with open(file_path, 'r') as jsonfile:
+            metrics = json.load(jsonfile)
+    GAN_type = model
+    if GAN_type not in list(metrics.keys()): metrics[GAN_type] = dict()
+    metrics[GAN_type]['train_loss'] = [float(tl) for tl in train_loss]
+    metrics[GAN_type]['valid_loss'] = [float(vl) for vl in valid_loss]
+    with open(file_path, 'w') as jsonfile:
+        json.dump(metrics, jsonfile)
+
     plt.xlabel('Number of Steps')
     plt.ylabel('Loss')
     smoothened_loss = list()
@@ -94,7 +99,6 @@ def view_maps(maps, keys, meta, split_objs=True):
         items = meta['essentials']['max']
         for j in range(len(keys)):
             plt.subplot(1, 4, j+1)
-            # plt.title(feature_keys[j] if feature_keys[j] != 'essentials' else 'thingsmap')
             if keys[j] in ['essentials','thingsmap']:
                 plt.imshow((maps[0,:,:,j]*55/items)+tf.cast(maps[0,:,:,j]>0,tf.float32)*200, cmap='gray')
             else:

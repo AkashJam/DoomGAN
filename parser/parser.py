@@ -1,9 +1,8 @@
 from WADEditor import WADReader
 import tensorflow as tf
-import os, json, sys, math
-from matplotlib import pyplot,colors,ticker
+import os, json, sys
+from matplotlib import pyplot
 import Dictionaries.ThingTypes as ThingTypes
-import numpy as np
 from skimage.morphology import label
 
 def read_json(scraped_path):
@@ -16,33 +15,33 @@ def read_json(scraped_path):
       print('Loaded {} records.'.format(len(scraped_info)))
       if len(scraped_info) == 0:
         print('No scraped info present')
-        return None
+        sys.exit()
       else:
         scraped_ids = [info['id'] for info in scraped_info if 'id' in info]
         return scraped_ids
   else:
     print('JSON not found')
-    return None
+    sys.exit()
+  
   
 def plot_dims(widths, heights):
   fig, ax = pyplot.subplots(tight_layout=True)
   pyplot.xlabel('Map Width in DOOM Units')
   pyplot.ylabel('Map Length in DOOM Units')
-  sdh = ax.hexbin(widths, heights, gridsize=20, cmap='viridis_r', mincnt=1)
+  sdh = ax.hexbin(widths, heights, gridsize=23, cmap='viridis_r', mincnt=1)
   bar = fig.colorbar(sdh)
-  # bar.formatter.set_useOffset(True)
-  # hist = ax.hist2d(maps_width, maps_height, bins=50, norm=colors.LogNorm())
-  ax.set_xlim([0,20000])
-  ax.set_ylim([0,20000])
+  ax.set_xlim([0,30000])
+  ax.set_ylim([0,30000])
   pyplot.show()
 
+
 def parse_wads(wad_ids, dataset_path):
-  maps_height = list()
-  maps_width = list()
   feature_maps = list()
   reader = WADReader()
   valid_dataset = list()
   maps_meta = dict()
+  maps_meta['lengths'] = list()
+  maps_meta['widths'] = list()
   maps_meta['max_rooms'] = 0
   for id in wad_ids:
     wad_path = dataset_path + id + "/"
@@ -55,26 +54,24 @@ def parse_wads(wad_ids, dataset_path):
             levels = wad_with_features["levels"]
             features = levels[0]["features"]
             sections, floors = label(levels[0]["maps"]["floormap"], connectivity=2, return_num=True)
-            if floors <=2 and features["number_of_monsters"]>0 and features["number_of_weapons"]>0:
-              # pyplot.imshow(map)
-              # pyplot.show()
-              # Adding extracted features with the map 1495 without floor check, 693 with floor = 1 , 949 with floor <=2
-              # feature_map = levels[0]["maps"]
-              # feature_map.update(levels[0]["features"])
-              # feature_maps.append(feature_map)
+            if floors > 1:
+              areas = list()
+              for i in range(floors):
+                if i != 0:
+                  area = int(tf.reduce_sum(tf.cast(sections==i,tf.int32)))
+                  areas.append(area)
+            if (floors ==1 or max(areas)/8>(sum(areas)-max(areas))) and features["number_of_monsters"]>0 and features["number_of_weapons"]>0:
               map = levels[0]["maps"]["roommap"]
               if map.max() > maps_meta['max_rooms']: maps_meta['max_rooms'] = map.max()
               feature_maps.append(levels[0]["maps"])
               valid_dataset.append({'id':id, 'name':file})
               print('added level', id, 'from', file)
-              maps_height.append(features['x_max']-features['x_min'])
-              maps_width.append(features['y_max']-features['y_min'])
+              maps_meta['widths'].append(features['width'])
+              maps_meta['lengths'].append(features['height'])
               break
         except:
           print('failed to add level', id, 'from', file)
     # if len(valid_dataset) >= 10: break
-  plot_dims(maps_width, maps_height)
-  print(len(maps_height))
   return feature_maps, valid_dataset, maps_meta
 
 def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
@@ -90,25 +87,13 @@ def metadata_gen(wad_list,map_keys,cate_pref,save_path,meta,graphics_meta):
   map_meta["rightwalltexturemap"] = {"type": "uint8", "min": 0, "max": graphics_meta["textures"]}
   map_meta["leftwalltexturemap"] = {"type": "uint8", "min": 0, "max": graphics_meta["textures"]}
   map_meta["thingsmap"] = {"type": "uint8", "min": 0, "max": 123}
+  obj = ThingTypes.get_index_by_category('essentials')
+  map_meta["essentials"] = {"type": "uint8", "min": 0, "max": obj[-1]}
 
-  obj = dict()
   cate = ThingTypes.get_all_categories()
   for cat in cate:
-    obj[cat] = ThingTypes.get_index_by_category(cat)
-  map_meta["start"] = {"type": "uint8", "min": obj["start"][0]-1, "max": obj["start"][-1]}
-  map_meta["other"]=  {"type": "uint8", "min":obj["other"][0]-1, "max": obj["other"][-1]}
-  map_meta["keys"] = {"type": "uint8", "min": obj["keys"][0]-1, "max": obj["keys"][-1]}
-  map_meta["decorations"] = {"type": "uint8", "min": obj["decorations"][0]-1, "max": obj["decorations"][-1]}
-  map_meta["obstacles"] = {"type": "uint8", "min": obj["obstacles"][0]-1, "max": obj["obstacles"][-1]}
-  map_meta["monsters"] = {"type": "uint8", "min": obj["monsters"][0]-1, "max": obj["monsters"][-1]}
-  map_meta["ammunitions"] = {"type": "uint8", "min": obj["ammunitions"][0]-1, "max": obj["ammunitions"][-1]}
-  map_meta["weapons"] = {"type": "uint8", "min": obj["weapons"][0]-1, "max": obj["weapons"][-1]}
-  map_meta["powerups"] = {"type": "uint8", "min": obj["powerups"][0]-1, "max": obj["powerups"][-1]}
-  map_meta["artifacts"] = {"type": "uint8", "min": obj["artifacts"][0]-1, "max": obj["artifacts"][-1]}
-
-  obj['essentials'] = ThingTypes.get_index_by_category('essentials')
-  map_meta["essentials"] = {"type": "uint8", "min": 0, "max": obj['essentials'][-1]}
-
+    obj = ThingTypes.get_index_by_category(cat)
+    map_meta[cat] = {"type": "uint8", "min": obj[0]-1, "max": obj[-1]}
 
   map_dict = dict()
   map_dict['wads'] = {wad['id']: i for i,wad in enumerate(wad_list)}
@@ -128,22 +113,16 @@ def _bytes_feature(value):
         value = value.numpy() # get value of tensor
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
-# Created as it is unable to do it inline 
-def serialize_array(array):
-  array = tf.io.serialize_tensor(array)
-  return array
 
-
-# pads the maps to show relatve scale, needs addition of image size recification to take into consideration
-def map_padding(mat, keys, cate):
+def organize_maps(mat, keys, cate):
   organized_map = dict()
   for key in keys:
     if key == 'thingsmap':
-      organized_map[key] = mat[key][key] # if not pad else np.pad(mat[key][key], ((x, x), (y, y)), 'constant')
+      organized_map[key] = mat[key][key]
       for cat in cate:
-        organized_map[cat] = mat[key][cat] # if not pad else np.pad(mat[key][cat], ((x, x), (y, y)), 'constant')
+        organized_map[cat] = mat[key][cat]
     else:
-      organized_map[key] = mat[key] # if not pad else np.pad(mat[key], ((x, x), (y, y)), 'constant')
+      organized_map[key] = mat[key]
   return organized_map
 
 
@@ -156,8 +135,8 @@ def generate_tfrecord(maps,keys_pref,cate_pref,save_path):
     os.makedirs(save_path)
   with tf.io.TFRecordWriter(file_path) as writer:
     for map in maps:
-      org_maps = map_padding(map,keys_pref,cate_pref)
-      serialized_array = {key: serialize_array(org_maps[key]) for key in keys}
+      org_maps = organize_maps(map,keys_pref,cate_pref)
+      serialized_array = {key: tf.io.serialize_tensor(org_maps[key]) for key in keys}
       feature = {key: _bytes_feature(serialized_array[key]) for key in keys}
       example_message = tf.train.Example(features=tf.train.Features(feature=feature))
       writer.write(example_message.SerializeToString())
@@ -174,14 +153,14 @@ def doom_parser(wads_path,keys,cate,save_path):
     sys.exit()
   wad_ids = read_json(wads_path)
   feature_maps, wad_list, meta = parse_wads(wad_ids, wads_path)
-  # generate_tfrecord(feature_maps,keys,cate,save_path)
-  # metadata_gen(wad_list,keys,cate,save_path,meta,graphics["meta"])
+  plot_dims(meta['widths'], meta['lengths'])
+  print(len(meta['lengths']))
+  generate_tfrecord(feature_maps,keys,cate,save_path)
+  metadata_gen(wad_list,keys,cate,save_path,meta,graphics["meta"])
 
 
 dataset_path = '../dataset/scraped/doom/'
 save_path = '../dataset/parsed/doom/'
-# All the generated maps are ['thingsmap', 'floormap', 'wallmap', 'heightmap', 'triggermap', 'roommap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap', 
-# 'leftwalltexturemap'] with things map containing ['start','other', 'keys', 'decorations', 'obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 keys = ['floormap', 'wallmap', 'heightmap', 'triggermap', 'roommap', 'thingsmap', 'floortexturemap', 'ceilingtexturemap', 'rightwalltexturemap','leftwalltexturemap']
 things_cate = ['essentials','start', 'other', 'keys','obstacles',  'monsters', 'ammunitions', 'weapons', 'powerups', 'artifacts']
 doom_parser(dataset_path,keys,things_cate,save_path)

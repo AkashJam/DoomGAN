@@ -205,10 +205,10 @@ def train(epochs):
 
     if (epoch+1)%10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
-    loc = 'generated_maps/hybrid/trad_pix2pix/' if trad else 'generated_maps/hybrid/pix2pix/'
-    generate_images(generator, seed, epoch+1, object_maps, is_p2p=True, is_trad=trad, test_input=scaled_sample_input, meta=map_meta, test_keys=topological_maps)
-    generate_loss_graph(disc_ts_loss, disc_vs_loss, 'discriminator', location = loc)
-    generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', location = loc)
+    loc = 'generated_maps/hybrid/trad_can/' if trad else 'generated_maps/hybrid/mod_can/'
+    generate_images(generator, seed, epoch+1, object_maps, is_can=True, is_trad=trad, test_input=scaled_sample_input, meta=map_meta)
+    generate_loss_graph(disc_ts_loss, disc_vs_loss, 'discriminator', model,  location = loc)
+    generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', model, location = loc)
     print ('Time for epoch {} is {} sec'.format(epoch+1, time.time()-start))
 
 if __name__ == "__main__":
@@ -216,6 +216,7 @@ if __name__ == "__main__":
   trad = True
   n_tmaps = len(topological_maps)
   n_omaps = len(object_maps)
+  model = 'Traditional CAN' if trad else 'Modified CAN'
 
   training_set, validation_set, map_meta, sample = read_record(batch_size, sample_wgan=False)
   generator = Generator(n_tmaps,n_omaps)
@@ -223,7 +224,7 @@ if __name__ == "__main__":
   generator_optimizer = tf.keras.optimizers.Adam(6e-5, beta_1=0.5, beta_2=0.999)
   discriminator_optimizer = tf.keras.optimizers.Adam(6e-5, beta_1=0.5, beta_2=0.999)
 
-  checkpoint_dir = './training_checkpoints/hybrid/trad_pix2pix' if trad else './training_checkpoints/hybrid/pix2pix'
+  checkpoint_dir = './training_checkpoints/hybrid/trad_can' if trad else './training_checkpoints/hybrid/mod_can'
   if not os.path.exists(checkpoint_dir+'/'):
     os.makedirs(checkpoint_dir+'/')
   checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")

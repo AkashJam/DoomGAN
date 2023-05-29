@@ -73,7 +73,7 @@ def _parse_tfr_element(element):
     return features
 
 
-def partition_dataset(ds, ds_size, batch_size, train_split=5/6, val_split=1/6, shuffle=True):
+def partition_dataset(ds, ds_size, batch_size, train_split=0.8, val_split=0.2, shuffle=True):
     assert (train_split + val_split) == 1
     
     if shuffle:
@@ -96,12 +96,13 @@ def normalize_maps(x, map_meta, map_names, use_sigmoid=True):
     :param use_sigmoid: if True data will be in range 0,1, if False it will be in -1;1
     :return: a normalized x vector
     """
+    fx = tf.cast(x,tf.float32)
     a = 0 if use_sigmoid else -1
     b = 1
     max = tf.constant([map_meta[m]['max'] for m in map_names], dtype=tf.float32) * tf.ones(tf.convert_to_tensor(x).get_shape())
     min = tf.constant([map_meta[m]['min'] for m in map_names], dtype=tf.float32) * tf.ones(tf.convert_to_tensor(x).get_shape())
     min_mat = tf.constant([map_meta[m]['min'] for m in map_names], dtype=tf.float32) * tf.cast(x>0,tf.float32)
-    return a + ((x-min_mat)*(b-a))/(max-min)
+    return a + ((fx-min_mat)*(b-a))/(max-min)
 
 
 def rescale_maps(x, map_meta, map_names, use_sigmoid=True):

@@ -18,17 +18,19 @@ def plot_train_metrics(save_path = 'eval_metrics/'):
     else:
         with open(file_path, 'r') as jsonfile:
             metrics = json.load(jsonfile)
-            CAN_types = list(metrics.keys())
+            GAN_types = list(metrics.keys())
+            CAN_types = [n for n in GAN_types if "CAN" in n]
             for key in list(metrics[CAN_types[0]].keys()):
-                for CAN_type in CAN_types:
-                    steps = [stp*100 for stp in list(range(len(metrics[CAN_type][key])))]
-                    plt.xlabel('Number of Steps')
-                    plt.ylabel(key)
-                    plt.plot(steps, metrics[CAN_type][key] , label=CAN_type)
-                plt.legend(loc="upper right")
-                # plt.show()
-                plt.savefig(save_path + key + '_graph')
-                plt.close()
+                if 'loss' not in key:
+                    for CAN_type in CAN_types:
+                        steps = [stp*100 for stp in list(range(len(metrics[CAN_type][key])))]
+                        plt.xlabel('Number of Steps')
+                        plt.ylabel(key)
+                        plt.plot(steps, metrics[CAN_type][key] , label=CAN_type)
+                    plt.legend(loc="upper right")
+                    # plt.show()
+                    plt.savefig(save_path + key + '_graph')
+                    plt.close()
 
 
 def plot_prop_graph(props):
@@ -253,12 +255,12 @@ if __name__ == "__main__":
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
     hybrid_cgen = canGen(len(topological_maps),len(object_maps))
-    checkpoint_dir = './training_checkpoints/hybrid/pix2pix'
+    checkpoint_dir = './training_checkpoints/hybrid/mod_can'
     checkpoint = tf.train.Checkpoint(generator=hybrid_cgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
     hybrid_trad_cgen = canGen(len(topological_maps),len(object_maps))
-    checkpoint_dir = './training_checkpoints/hybrid/trad_pix2pix'
+    checkpoint_dir = './training_checkpoints/hybrid/trad_can'
     checkpoint = tf.train.Checkpoint(generator=hybrid_trad_cgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
