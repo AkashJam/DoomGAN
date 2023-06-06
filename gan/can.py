@@ -1,9 +1,9 @@
 import tensorflow as tf
 import time, os
-from NetworkArchitecture import topological_maps, object_maps, CAN_gen, CAN_disc
-from DataProcessing import normalize_maps, read_record
-from NNMeta import generate_images, generate_loss_graph, training_metrics
-from eval_metrics.metrics import encoding_error, mat_entropy, objs_per_unit_area, oob_error
+from gan.NetworkArchitecture import topological_maps, object_maps, CAN_gen, CAN_disc
+from gan.DataProcessing import normalize_maps, read_record
+from gan.NNMeta import generate_images, generate_loss_graph, training_metrics
+from gan.eval_metrics.metrics import encoding_error, mat_entropy, objs_per_unit_area, oob_error
 
 def downsample(filters, kernel, stride, apply_batchnorm=True):
   initializer = tf.random_normal_initializer(0., 0.02)
@@ -211,9 +211,10 @@ def train(epochs):
     generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', model, location = loc)
     print ('Time for epoch {} is {} sec'.format(epoch+1, time.time()-start))
 
+
 if __name__ == "__main__":
   batch_size = 1
-  trad = True
+  trad = False
   n_tmaps = len(topological_maps)
   n_omaps = len(object_maps)
   model = 'Traditional CAN' if trad else 'Modified CAN'

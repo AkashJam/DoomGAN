@@ -1,5 +1,5 @@
 # Parser
-DOOM WADs consists of 
+Handles the translation of DOOM WADs into a set of feature maps as well as the conversion of the +
 
 
 ZenNode is used in the final process to generate the remaining aspects of the DOOM WAD to be playable by the DOOM engine such as predefined computation like the BLOCKMAP and REJECT lumps

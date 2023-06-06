@@ -1,14 +1,15 @@
+import sys
+sys.path.insert(0,'..')
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from can import Generator as canGen
-from wgan import Generator as wganGen
-from HybridGen import hybrid_fmaps
-from WganGen import wgan_fmaps
-from DataProcessing import read_record
+from gan.can import Generator as canGen
+from gan.wgan import Generator as wganGen
+from DOOMLevelGen import hybrid_fmaps, wgan_fmaps
+from gan.DataProcessing import read_record
 import os, json
-from NetworkArchitecture import topological_maps, object_maps
-from eval_metrics.metrics import level_props, calc_RipleyK
+from gan.NetworkArchitecture import topological_maps, object_maps
+from gan.eval_metrics.metrics import level_props, calc_RipleyK
 
 
 def plot_train_metrics(save_path = 'eval_metrics/'):
@@ -54,9 +55,9 @@ def plot_prop_graph(props):
     ax.set_xticks(1.5*x + width, sets)
     ax.legend()
     ax.set_ylim(0, 100)
-    plt.show()
-    # plt.savefig('./eval_metrics/props')
-    # plt.close()
+    # plt.show()
+    plt.savefig('./eval_metrics/props')
+    plt.close()
 
 
 def calc_proportions(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
@@ -268,9 +269,9 @@ if __name__ == "__main__":
     for i, data in training_set.enumerate().as_numpy_iterator():
         z = tf.random.normal([b_size, z_dim])
         noise = tf.random.normal([b_size, 256, 256, 1])
-        wgan_maps, keys, n_items = wgan_fmaps(trad_wgen, z, map_meta)
-        hybrid_trad_maps, keys, n_items = hybrid_fmaps(hybrid_wgen, hybrid_trad_cgen, z, noise, map_meta)
-        hybrid_maps, keys, n_items = hybrid_fmaps(hybrid_wgen, hybrid_cgen, z, noise, map_meta)
+        wgan_maps, keys = wgan_fmaps(trad_wgen, z, map_meta)
+        hybrid_trad_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_trad_cgen, z, noise, map_meta)
+        hybrid_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_cgen, z, noise, map_meta)
         real_maps = np.stack([data[m] for m in keys], axis=-1)
         r_maps = np.concatenate((r_maps,real_maps), axis=0) if i != 0 else real_maps
         w_maps = np.concatenate((w_maps,wgan_maps.numpy()), axis=0) if i != 0 else wgan_maps.numpy()

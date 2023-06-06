@@ -1,9 +1,9 @@
 import tensorflow as tf
 import tensorflow_addons as tfa
 import time, math, os
-from NetworkArchitecture import topological_maps, WGAN_gen, WGAN_disc
-from DataProcessing import normalize_maps, rescale_maps, generate_sample, read_record
-from NNMeta import generate_images, generate_loss_graph
+from gan.NetworkArchitecture import topological_maps, WGAN_gen, WGAN_disc
+from gan.DataProcessing import normalize_maps, rescale_maps, generate_sample, read_record
+from gan.NNMeta import generate_images, generate_loss_graph
 
 
 def upsample(filters, kernel, stride, apply_dropout=False):

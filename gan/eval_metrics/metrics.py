@@ -1,7 +1,8 @@
 import tensorflow as tf
 import ripleyk
 import numpy as np
-from NetworkArchitecture import object_maps
+from gan.NetworkArchitecture import object_maps
+from gan.DataProcessing import rescale_maps
 from scipy.stats import entropy
 
 
@@ -67,6 +68,7 @@ def level_props(maps, keys, meta, test_size):
         if len(maps_props)==test_size: break
     return maps_props
 
+
 def calc_RipleyK(maps, keys, test_size, radii):
     floor_id = keys.index('floormap')
     things_id = keys.index('essentials')
@@ -94,3 +96,4 @@ def calc_RipleyK(maps, keys, test_size, radii):
         level_ripk = [ripk] if len(level_ripk) == 0 else level_ripk + [ripk]
         if len(level_ripk)==test_size: break
     return level_areas, level_ripk
+

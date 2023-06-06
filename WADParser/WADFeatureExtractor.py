@@ -6,10 +6,9 @@ import skimage.draw as draw
 from skimage.morphology import label
 from skimage.filters import roberts
 import scipy as sp
-from matplotlib import pyplot as plt
-import Dictionaries.ThingTypes as ThingTypes
-import Dictionaries.LinedefTypes as LinedefTypes
-from RoomTopology import topological_features
+from WADParser.Dictionaries import ThingTypes as ThingTypes
+from WADParser.Dictionaries import LinedefTypes as LinedefTypes
+from WADParser.RoomTopology import topological_features
 
 
 class WADFeatureExtractor(object):

@@ -1,8 +1,10 @@
 import tensorflow as tf
 import os, json, random
 from matplotlib import pyplot as plt
-from NetworkArchitecture import topological_maps, object_maps
-from DataProcessing import rescale_maps
+from gan.NetworkArchitecture import topological_maps, object_maps
+from gan.DataProcessing import rescale_maps
+from tensorflow.python.ops.numpy_ops import np_config
+np_config.enable_numpy_behavior()
 
 
 def training_metrics(count, trad, enc, ntp, oob, obj, save_path="eval_metrics/"):
@@ -77,24 +79,49 @@ def generate_loss_graph(train_loss, valid_loss, key, model, sfactor = 10, locati
     plt.close()
 
 
-def view_maps(maps, keys, meta, split_objs=True):
-    plt.figure(figsize=(8, 4))
+def view_maps(maps, keys, meta, split_objs=True, only_objs=True):
+    n_maps = maps.shape[0]
     if split_objs:
-        plt.subplot(6, 1, 1)
-        floorid = keys.index('floormap')
-        plt.imshow(maps[0,:,:,floorid], cmap='gray')
-        plt.axis('off')
-        thingsid = keys.index('essentials')
-        thingsmap = maps[0,:,:,thingsid]
-        for i,cate in enumerate(object_maps):
-            min = meta[cate]['min']
-            max = meta[cate]['max']
-            cate_mask = tf.cast(tf.logical_and(thingsmap>min,thingsmap<=max),tf.uint8)
-            cate_objs = thingsmap*cate_mask
-            plt.subplot(6, 1, i+2)
-            plt.imshow((cate_objs*55/max)+cate_mask*200, cmap='gray')
-            plt.axis('off')
-        plt.show()
+        if not only_objs:
+            for i in range(maps.shape[3]):
+                thingsid = keys.index('essentials')
+                if i!=thingsid:
+                    for j in range(n_maps):
+                        plt.subplot(8, n_maps, i*n_maps+j+1)
+                        plt.imshow(maps[j,:,:,i], cmap='gray')
+                        plt.axis('off')
+                else:
+                    for j,cate in enumerate(object_maps):
+                        min = meta[cate]['min']
+                        max = meta[cate]['max']
+                        for k in range(n_maps):
+                            cate_mask = tf.cast(tf.logical_and(maps[k,:,:,thingsid]>min,maps[k,:,:,thingsid]<=max),tf.uint8)
+                            cate_objs = maps[k,:,:,thingsid]*cate_mask
+                            plt.subplot(8, n_maps, n_maps+j*n_maps+k+1)
+                            plt.imshow((cate_objs*55/max)+cate_mask*200, cmap='gray')
+                            plt.axis('off')
+            plt.tight_layout(pad=0.2)
+            plt.show()
+        else:
+            for i in range(n_maps):
+                for j in range(maps.shape[3]):
+                    floorid = keys.index('floormap')
+                    thingsid = keys.index('essentials')
+                    if j== floorid:
+                            plt.subplot(2*n_maps, 3, i*6+1)
+                            plt.imshow(maps[i,:,:,j]>0, cmap='gray')
+                            plt.axis('off')
+                    elif j== thingsid:
+                        for k,cate in enumerate(object_maps):
+                            min = meta[cate]['min']
+                            max = meta[cate]['max']
+                            cate_mask = tf.cast(tf.logical_and(maps[i,:,:,j]>min,maps[i,:,:,j]<=max),tf.uint8)
+                            cate_objs = maps[i,:,:,j]*cate_mask
+                            plt.subplot(2*n_maps, 3, i*6+k+2)
+                            plt.imshow((cate_objs*55/max)+cate_mask*200, cmap='gray')
+                            plt.axis('off')
+            plt.tight_layout(pad=0.2)
+            plt.show()
     else:
         items = meta['essentials']['max']
         for j in range(len(keys)):

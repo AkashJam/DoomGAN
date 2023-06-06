@@ -1,19 +1,19 @@
 from struct import *
 import warnings
 import re, os, json
-import Lumps
+from WADParser.Lumps import *
 import matplotlib # required for DLL not found error
 from skimage import io
 import networkx as nx
-from WADFeatureExtractor import WADFeatureExtractor
+from WADParser.WADFeatureExtractor import WADFeatureExtractor
 
 import itertools
 import subprocess
 import numpy as np
 from skimage import morphology
-from Dictionaries.ThingTypes import *
-from RoomTopology import topological_features
-from flags import linedef_flags_to_int
+from WADParser.Dictionaries.ThingTypes import *
+from WADParser.RoomTopology import topological_features
+from WADParser.flags import linedef_flags_to_int
 
 class LumpInfo(dict):
     def __init__(self, filepos=None, size=None, name=None):

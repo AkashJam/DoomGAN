@@ -1,21 +1,16 @@
-import urllib.request
-import json
-import os
-import requests
+import urllib.request, json, os, requests, re, zipfile
 from bs4 import BeautifulSoup
-import re
-import zipfile
 
 
 def open_page(url):
     page = session.get(url).text
     return BeautifulSoup(page, "lxml")
 
+
 def fetch_subcategories_links(cate_url,exclude):
     cate_page = open_page(cate_url)
     cate_links = cate_page.find_all('a')
     subcate_urls = []
-
     for c in cate_links:
         # Finding urls that contain this path
         if c.has_attr('href') and 'idgames/levels/doom' in c['href']:
@@ -25,24 +20,21 @@ def fetch_subcategories_links(cate_url,exclude):
                 continue
             subcate_id = c['href'].split('/')[-2]
             subcate_urls += [cate_url + subcate_id + "/"]
-
     return subcate_urls
 
 
 def fetch_level_links(subcate_urls):
     level_urls=[]
-
     for subcate in subcate_urls:
         subcate_page = open_page(subcate)
         # Fetching links of individual levels in subcategory page
         subcate_page_link = subcate_page.find_all('a')
-
         for s in subcate_page_link:
             if s.has_attr('href') and s['href'].startswith('levels/doom'):
                 level_id = s['href'].split('/')[-1]
                 level_urls += [subcate + level_id]
-
     return level_urls
+
 
 def fetch_level_info(level_url):
     level_page = open_page(level_url)
@@ -50,7 +42,6 @@ def fetch_level_info(level_url):
     info_list = level_page.findAll('td', {'class': re.compile('filelist_field')})
     stars = info_list[-1].findAll('img', {'src': re.compile('star')})
     ratings = 0
-
     for x in stars:
         if x['src'] == 'images/star.gif':
             ratings+=1
@@ -58,7 +49,6 @@ def fetch_level_info(level_url):
             ratings+=0.5
         elif 'empty' not in x['src'] :
             ratings+=0.25
-    
     level_info = dict()
     level_info['id'] = level_url.split('/')[-1]
     level_info['name'] = info_list[0].contents[0][1:]
@@ -75,7 +65,6 @@ def download_wad(level_url, download_path):
     mainDiv = level_page.findAll('table', {'class': 'download'})[0]
     level_page_links = [entry.find_all('a') for entry in mainDiv.find_all('ul', {'class':'square'})][0]
     downloaded = False
-
     for file in level_page_links:
         link = file['href']
         filename = link.split('/')[-1]
@@ -105,7 +94,6 @@ def download_wad(level_url, download_path):
                 file.write(r.content)
                 downloaded = True
                 break
-
     if downloaded:
         # Extract ZIP files
         try:
@@ -116,49 +104,48 @@ def download_wad(level_url, download_path):
     # Need to return true if downloaded else false to see if the info needs to be saved into the doom json file
     return downloaded
 
+
+def scrap_levels():
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
+    scraped_info = list()
+    visited_links = list()
+    json_path = save_path + 'doom.json'
+    if os.path.isfile(json_path):
+        print('Trying to resume download...')
+        with open(json_path, 'r') as jsonfile:
+            scraped_info = json.load(jsonfile)
+            print('Loaded {} records.'.format(len(scraped_info)))
+            if len(scraped_info) != 0:
+                # Check if the json file is present and try to resume downloading if possible
+                visited_links = [info['url'] for info in scraped_info if 'url' in info]
+
+    # Fetching subcategory url in doomworld 
+    sub_links = fetch_subcategories_links(archived_cate,excluded_list)
+    level_links = fetch_level_links(sub_links)
+
+    for level_link in level_links:
+        if level_link in visited_links:
+            print('skipping ',level_link)
+            continue
+        print('downloading level from ',level_link)
+        status = download_wad(level_link,save_path)
+        if status:
+            info = fetch_level_info(level_link)
+            print('downloading level info from ',level_link)
+            scraped_info.append(info)
+            with open(json_path, 'w') as jsonfile:
+                json.dump(scraped_info, jsonfile)
+
     
-# Main
-session = requests.Session() # required to download files from http servers
-archived_cate = 'https://www.doomworld.com/idgames/levels/doom/'
-# List of subcategories to be avoided
-excluded_list = ['deathmatch','Ports','megawads']
-save_path = '../dataset/scraped/doom/'
-
-
-# Create dataset directory
-if os.path.exists(save_path):
-    print('found location to store scraped files')
-else:
-    os.makedirs(save_path)
-
-# Check if the json file is present and try to resume downloading if possible
-scraped_info = list()
-visited_links = list()
-json_path = save_path + 'doom.json'
-if os.path.isfile(json_path):
-    print('Trying to resume download...')
-    with open(json_path, 'r') as jsonfile:
-        scraped_info = json.load(jsonfile)
-        print('Loaded {} records.'.format(len(scraped_info)))
-        if len(scraped_info) != 0:
-            visited_links = [info['url'] for info in scraped_info if 'url' in info]
-
-# Fetching subcategory url in doomworld 
-sub_links = fetch_subcategories_links(archived_cate,excluded_list)
-level_links = fetch_level_links(sub_links)
-
-for level_link in level_links:
-    if level_link in visited_links:
-        print('skipping ',level_link)
-        continue
-    print('downloading level from ',level_link)
-    status = download_wad(level_link,save_path)
-    if status:
-        info = fetch_level_info(level_link)
-        print('downloading level info from ',level_link)
-        scraped_info.append(info)
-        with open(json_path, 'w') as jsonfile:
-            json.dump(scraped_info, jsonfile)
+if __name__ == "__main__":
+    session = requests.Session() # required to download files from http servers
+    archived_cate = 'https://www.doomworld.com/idgames/levels/doom/'
+    # List of subcategories to be avoided
+    excluded_list = ['deathmatch','Ports','megawads']
+    save_path = '../dataset/scraped/doom/'
+    scrap_levels()
+    
 
 
     

@@ -5,5 +5,13 @@ The goal of this project is to harness the power of DNN to automate the generati
 
 # Requirements
 This project is made using python v3.9 and requires tensorflow related application for applying GPU hardware to boost the computational
-It includes the installation Cuda v11.2 and Cudnn v8.7 with tensorflow-gpu instead of native tensorflow
+It includes the installation Cuda v11.2 and Cudnn v8.7 with tensorflow-gpu instead of native tensorflow. The remainder of the libraries are included in the 'requirements.txt' file which needs to be installed before proceeding
+
+# Scrap the dataset
+
+
+# Parse the dataset
+
+
+# Train the network
 

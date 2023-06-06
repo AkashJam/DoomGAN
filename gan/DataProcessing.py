@@ -2,10 +2,14 @@ import os, json, sys, random
 import tensorflow as tf
 
 
-def read_json(save_path = '../dataset/parsed/doom/'):
+def read_json(save_path = 'dataset/parsed/doom/'):
     file_path = save_path + 'metadata.json'
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
+            map_meta = json.load(jsonfile)
+        return map_meta
+    elif os.path.isfile('../'+file_path):
+        with open('../'+file_path, 'r') as jsonfile:
             map_meta = json.load(jsonfile)
         return map_meta
     else:
@@ -13,7 +17,7 @@ def read_json(save_path = '../dataset/parsed/doom/'):
         sys.exit()
 
 
-def read_record(batch_size=32, save_path='../dataset/parsed/doom/',sample_wgan=False): 
+def read_record(batch_size=32, save_path='../dataset/parsed/doom/', sample_wgan=False): 
     file_path = save_path + 'data.tfrecords'
     metadata = read_json()
     if not os.path.isfile(file_path):
