@@ -3,7 +3,7 @@ sys.path.insert(0,'..')
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from gan.can import Generator as canGen
+from gan.cgan import Generator as cganGen
 from gan.wgan import Generator as wganGen
 from DOOMLevelGen import hybrid_fmaps, wgan_fmaps
 from gan.DataProcessing import read_record
@@ -20,15 +20,16 @@ def plot_train_metrics(save_path = 'eval_metrics/'):
         with open(file_path, 'r') as jsonfile:
             metrics = json.load(jsonfile)
             GAN_types = list(metrics.keys())
-            CAN_types = [n for n in GAN_types if "CAN" in n]
-            for key in list(metrics[CAN_types[0]].keys()):
+            cGAN_types = [n for n in GAN_types if "cGAN" in n]
+            for key in list(metrics[cGAN_types[0]].keys()):
                 if 'loss' not in key:
-                    for CAN_type in CAN_types:
-                        steps = [stp*100 for stp in list(range(len(metrics[CAN_type][key])))]
+                    for cGAN_type in cGAN_types:
+                        steps = [stp*100 for stp in list(range(len(metrics[cGAN_type][key])))]
                         plt.xlabel('Number of Steps')
                         plt.ylabel(key)
-                        plt.plot(steps, metrics[CAN_type][key] , label=CAN_type)
+                        plt.plot(steps, metrics[cGAN_type][key] , label=cGAN_type)
                     plt.legend(loc="upper right")
+                    if key=='out_of_bounds_err': plt.ylim(0, 1000)
                     # plt.show()
                     plt.savefig(save_path + key + '_graph')
                     plt.close()
@@ -56,7 +57,7 @@ def plot_prop_graph(props):
     ax.legend()
     ax.set_ylim(0, 100)
     # plt.show()
-    plt.savefig('./eval_metrics/props')
+    plt.savefig('./eval_metrics/cate_props')
     plt.close()
 
 
@@ -67,9 +68,9 @@ def calc_proportions(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
     hybrid_mod_props = level_props(hybrid_mod, keys, meta, test_size)
 
     proportions = {'Real': tuple(round(100*sum(real_props[cate])/len(real_props[cate])) for cate in object_maps), 
-                    'WGAN': tuple(round(100*sum(wgan_props[cate])/len(wgan_props[cate])) for cate in object_maps), 
-                    'Hybrid - Trad CAN': tuple(round(100*sum(hybrid_trad_props[cate])/len(hybrid_trad_props[cate])) for cate in object_maps),
-                    'Hybrid - Mod CAN': tuple(round(100*sum(hybrid_mod_props[cate])/len(hybrid_mod_props[cate])) for cate in object_maps)} 
+                    'WGAN-GP': tuple(round(100*sum(wgan_props[cate])/len(wgan_props[cate])) for cate in object_maps), 
+                    'Traditional cGAN': tuple(round(100*sum(hybrid_trad_props[cate])/len(hybrid_trad_props[cate])) for cate in object_maps),
+                    'Modified cGAN': tuple(round(100*sum(hybrid_mod_props[cate])/len(hybrid_mod_props[cate])) for cate in object_maps)} 
     plot_prop_graph(proportions)
 
 
@@ -91,9 +92,9 @@ def calc_stats(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
         plt.xlabel(cate + ' type')
         plt.ylabel('Average object population')
         plt.plot(list(range(1,max-min+1)), real_cate, label = "Real")
-        plt.plot(list(range(1,max-min+1)), wgan_cate, label = "WGAN")
-        plt.plot(list(range(1,max-min+1)), hybrid_trad_cate, label = "Hybrid-Trad CAN")
-        plt.plot(list(range(1,max-min+1)), hybrid_mod_cate, label = "Hybrid-Mod CAN")
+        plt.plot(list(range(1,max-min+1)), wgan_cate, label = "WGAN-GP")
+        plt.plot(list(range(1,max-min+1)), hybrid_trad_cate, label = "Traditional cGAN")
+        plt.plot(list(range(1,max-min+1)), hybrid_mod_cate, label = "Modified cGAN")
         ax.set_xlim(1, max-min)
         if cate == 'monsters': ax.set_ylim(0, 80)
         ax.xaxis.get_major_locator().set_params(integer=True)
@@ -214,10 +215,10 @@ def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):
 
         real_ripk = [ripk[i] for ripk in rlevel_ripk]
         wgan_ripk = [ripk[i] for ripk in wlevel_ripk]
-        trad_can_ripk = [ripk[i] for ripk in htlevel_ripk]
-        mod_can_ripk = [ripk[i] for ripk in hmlevel_ripk]
-        level_ripk = [real_ripk, wgan_ripk, trad_can_ripk, mod_can_ripk]
-        labels = ['Real', 'WGAN', 'Hybrid - Trad CAN', 'Hybrid - Mod CAN']
+        trad_cgan_ripk = [ripk[i] for ripk in htlevel_ripk]
+        mod_cgan_ripk = [ripk[i] for ripk in hmlevel_ripk]
+        level_ripk = [real_ripk, wgan_ripk, trad_cgan_ripk, mod_cgan_ripk]
+        labels = ['Real', 'WGAN-GP', 'Traditional cGAN', 'Modified cGAN']
 
         fig = plt.figure(figsize=(10,6))
         fig.subplots(1, 4, sharey=True)
@@ -236,7 +237,7 @@ def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):
         fig.text(0.08, 0.5, "Count", ha="center", va="center", rotation=90)
         # fig.tight_layout(pad=0.4)
         # plt.show()
-        plt.savefig('./eval_metrics/ripk'+str(int(r*10)))
+        plt.savefig('./eval_metrics/ripk_'+str(int(r*10)))
         plt.close()
 
 
@@ -255,13 +256,13 @@ if __name__ == "__main__":
     checkpoint = tf.train.Checkpoint(generator=hybrid_wgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
-    hybrid_cgen = canGen(len(topological_maps),len(object_maps))
-    checkpoint_dir = './training_checkpoints/hybrid/mod_can'
-    checkpoint = tf.train.Checkpoint(generator=hybrid_cgen)
+    hybrid_mod_cgen = cganGen(len(topological_maps),len(object_maps))
+    checkpoint_dir = './training_checkpoints/hybrid/mod_cgan'
+    checkpoint = tf.train.Checkpoint(generator=hybrid_mod_cgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
-    hybrid_trad_cgen = canGen(len(topological_maps),len(object_maps))
-    checkpoint_dir = './training_checkpoints/hybrid/trad_can'
+    hybrid_trad_cgen = cganGen(len(topological_maps),len(object_maps))
+    checkpoint_dir = './training_checkpoints/hybrid/trad_cgan'
     checkpoint = tf.train.Checkpoint(generator=hybrid_trad_cgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
 
@@ -271,7 +272,7 @@ if __name__ == "__main__":
         noise = tf.random.normal([b_size, 256, 256, 1])
         wgan_maps, keys = wgan_fmaps(trad_wgen, z, map_meta)
         hybrid_trad_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_trad_cgen, z, noise, map_meta)
-        hybrid_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_cgen, z, noise, map_meta)
+        hybrid_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_mod_cgen, z, noise, map_meta)
         real_maps = np.stack([data[m] for m in keys], axis=-1)
         r_maps = np.concatenate((r_maps,real_maps), axis=0) if i != 0 else real_maps
         w_maps = np.concatenate((w_maps,wgan_maps.numpy()), axis=0) if i != 0 else wgan_maps.numpy()

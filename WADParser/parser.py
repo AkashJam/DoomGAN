@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0,'..')
+
 from WADEditor import WADReader
 import tensorflow as tf
 import os, json, sys

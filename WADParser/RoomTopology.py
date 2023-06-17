@@ -93,6 +93,8 @@ def create_graph(floormap, return_dist=False, room_coordinates=False):
     local_max[tuple(peak_mask.T)] = True
     markers = ndi.label(local_max)[0]
     roommap = watershed(-dist, markers, mask=floormap)
+    # plt.imshow(roommap)
+    # io.show()
     
     # Find edges in an image
     edges = filters.sobel(roommap)

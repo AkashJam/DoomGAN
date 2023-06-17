@@ -1,6 +1,8 @@
+import sys
+sys.path.insert(0,'..')
 import tensorflow as tf
 import time, os
-from gan.NetworkArchitecture import topological_maps, object_maps, CAN_gen, CAN_disc
+from gan.NetworkArchitecture import topological_maps, object_maps, cGAN_gen, cGAN_disc
 from gan.DataProcessing import normalize_maps, read_record
 from gan.NNMeta import generate_images, generate_loss_graph, training_metrics
 from gan.eval_metrics.metrics import encoding_error, mat_entropy, objs_per_unit_area, oob_error
@@ -39,14 +41,14 @@ def Generator(n_inp, n_opt):
 
   # Downsampling through the model
   skips = []
-  for layer in CAN_gen['downstack']:
+  for layer in cGAN_gen['downstack']:
     x = downsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['norm'])(x)
     skips.append(x)
 
   skips = reversed(skips[:-1])
 
   # Upsampling and establishing the skip connections
-  for layer, skip in zip(CAN_gen['upstack'], skips):
+  for layer, skip in zip(cGAN_gen['upstack'], skips):
     x = upsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['dropout'])(x)
     x = tf.keras.layers.Concatenate()([x, skip])
 
@@ -60,13 +62,7 @@ loss_object = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 def generator_loss(disc_generated_output, gen_output, target, input_imgs, LAMBDA=10):
   gan_loss = loss_object(tf.ones_like(disc_generated_output), disc_generated_output)
 
-  if trad:
-    # Mean absolute error
-    l1_loss = tf.reduce_mean(tf.abs(target - gen_output))
-    total_gen_loss = gan_loss + (LAMBDA * l1_loss)
-    return total_gen_loss, gan_loss, l1_loss 
-
-  else:
+  if mod:
     # Take floormap scaled to 0 or 1, invert the image and use it as a mask for the generated images 
     # to pick up objects generated outside the level bounds and add that to the loss
     floor_bool_mask = tf.cast(input_imgs[:,:,:,topological_maps.index('floormap')],tf.bool)
@@ -86,6 +82,12 @@ def generator_loss(disc_generated_output, gen_output, target, input_imgs, LAMBDA
     total_gen_loss = gan_loss + mask_loss + obj_loss
     return total_gen_loss, gan_loss, mask_loss, obj_loss
 
+  else:
+    # Mean absolute error
+    l1_loss = tf.reduce_mean(tf.abs(target - gen_output))
+    total_gen_loss = gan_loss + (LAMBDA * l1_loss)
+    return total_gen_loss, gan_loss, l1_loss 
+
 
 def Discriminator():
   inp = tf.keras.layers.Input(shape=[256, 256, n_tmaps], name='input_image')
@@ -95,7 +97,7 @@ def Discriminator():
   last = tf.keras.layers.Conv2D(1, 4, strides=1, kernel_initializer=initializer)
 
   x = tf.keras.layers.concatenate([inp, tar])
-  for layer in CAN_disc:
+  for layer in cGAN_disc:
     x = downsample(layer['n_filters'],layer['kernel_size'],layer['stride'],layer['norm'])(x)
 
   x = last(x)  # (batch_size, 1, 1, 1)
@@ -118,11 +120,11 @@ def train_step(input_image, target):
     disc_real_output = discriminator([input_image, target], training=True)
     disc_generated_output = discriminator([input_image, gen_output], training=True)
 
-    if trad:
+    if mod:
+      gen_total_loss, gen_gan_loss, gen_mask_loss, gen_obj_loss = generator_loss(disc_generated_output, gen_output, target, input_image)
+    else:
       gen_total_loss, gen_gan_loss, gen_l1_loss = generator_loss(disc_generated_output, gen_output, target, input_image, LAMBDA=100)
 
-    else:
-      gen_total_loss, gen_gan_loss, gen_mask_loss, gen_obj_loss = generator_loss(disc_generated_output, gen_output, target, input_image)
     disc_loss = discriminator_loss(disc_real_output, disc_generated_output)
 
   generator_gradients = gen_tape.gradient(gen_total_loss, generator.trainable_variables)
@@ -131,10 +133,9 @@ def train_step(input_image, target):
   generator_optimizer.apply_gradients(zip(generator_gradients, generator.trainable_variables))
   discriminator_optimizer.apply_gradients(zip(discriminator_gradients, discriminator.trainable_variables))
   
-  return {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss), "gan_loss": tf.abs(gen_gan_loss), 
-          "l1_loss": tf.abs(gen_l1_loss)} if trad else {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss), 
-                                                          "gan_loss": tf.abs(gen_gan_loss), "mask_loss": tf.abs(gen_mask_loss), 
-                                                          "obj_loss": tf.abs(gen_obj_loss)}
+  return {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss), "gan_loss": tf.abs(gen_gan_loss), "mask_loss": tf.abs(gen_mask_loss), 
+          "obj_loss": tf.abs(gen_obj_loss)} if mod else  {"d_loss": tf.abs(disc_loss), "g_loss": tf.abs(gen_total_loss), 
+                                                          "gan_loss": tf.abs(gen_gan_loss), "l1_loss": tf.abs(gen_l1_loss)}
 
 def v_loss(n_batches):
   v_gloss = list()
@@ -155,11 +156,11 @@ def v_loss(n_batches):
     disc_real_output = discriminator([x_input, x_target], training=False)
     disc_generated_output = discriminator([x_input, gen_output], training=False)
 
-    if trad:
+    if mod:
+      gen_total_loss, gen_gan_loss, gen_mask_loss, gen_obj_loss = generator_loss(disc_generated_output, gen_output, x_target, x_input)
+    else:
       gen_total_loss, gen_gan_loss, gen_l1_loss = generator_loss(disc_generated_output, gen_output, x_target, x_input, LAMBDA=100)
 
-    else:
-      gen_total_loss, gen_gan_loss, gen_mask_loss, gen_obj_loss = generator_loss(disc_generated_output, gen_output, x_target, x_input)
     disc_loss = discriminator_loss(disc_real_output, disc_generated_output)
     v_gloss.append(gen_total_loss)
     v_dloss.append(disc_loss)
@@ -169,7 +170,7 @@ def v_loss(n_batches):
     id = topological_maps.index('floormap')
     oob_arr.append(oob_error(gen_output, x_input[:,:,:,id]))
     obj_arr.append(objs_per_unit_area(gen_output, x_input[:,:,:,id]))
-  training_metrics(n_batches, trad, enc_arr, ntp_arr, oob_arr, obj_arr)
+  training_metrics(n_batches, mod, enc_arr, ntp_arr, oob_arr, obj_arr)
 
   avg_gloss = sum(v_gloss)/len(v_gloss)
   avg_dloss = sum(v_dloss)/len(v_dloss)
@@ -205,8 +206,8 @@ def train(epochs):
 
     if (epoch+1)%10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
-    loc = 'generated_maps/hybrid/trad_can/' if trad else 'generated_maps/hybrid/mod_can/'
-    generate_images(generator, seed, epoch+1, object_maps, is_can=True, is_trad=trad, test_input=scaled_sample_input, meta=map_meta)
+    loc = 'generated_maps/hybrid/mod_cgan/' if mod else 'generated_maps/hybrid/trad_cgan/'
+    generate_images(generator, seed, epoch+1, object_maps, is_cgan=True, is_mod=mod, test_input=scaled_sample_input, meta=map_meta)
     generate_loss_graph(disc_ts_loss, disc_vs_loss, 'discriminator', model,  location = loc)
     generate_loss_graph(gen_ts_loss, gen_vs_loss, 'generator', model, location = loc)
     print ('Time for epoch {} is {} sec'.format(epoch+1, time.time()-start))
@@ -214,10 +215,10 @@ def train(epochs):
 
 if __name__ == "__main__":
   batch_size = 1
-  trad = False
+  mod = True
   n_tmaps = len(topological_maps)
   n_omaps = len(object_maps)
-  model = 'Traditional CAN' if trad else 'Modified CAN'
+  model = 'Modified cGAN' if mod else 'Traditional cGAN'
 
   training_set, validation_set, map_meta, sample = read_record(batch_size, sample_wgan=False)
   generator = Generator(n_tmaps,n_omaps)
@@ -225,7 +226,7 @@ if __name__ == "__main__":
   generator_optimizer = tf.keras.optimizers.Adam(6e-5, beta_1=0.5, beta_2=0.999)
   discriminator_optimizer = tf.keras.optimizers.Adam(6e-5, beta_1=0.5, beta_2=0.999)
 
-  checkpoint_dir = './training_checkpoints/hybrid/trad_can' if trad else './training_checkpoints/hybrid/mod_can'
+  checkpoint_dir = './training_checkpoints/hybrid/mod_cgan' if mod else './training_checkpoints/hybrid/trad_cgan'
   if not os.path.exists(checkpoint_dir+'/'):
     os.makedirs(checkpoint_dir+'/')
   checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")

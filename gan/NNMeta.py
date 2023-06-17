@@ -7,32 +7,33 @@ from tensorflow.python.ops.numpy_ops import np_config
 np_config.enable_numpy_behavior()
 
 
-def training_metrics(count, trad, enc, ntp, oob, obj, save_path="eval_metrics/"):
+def training_metrics(count, mod, enc, ntp, oob, obj, save_path="eval_metrics/"):
     mets = [sum(ntp)/len(ntp), sum(enc)/len(enc), sum(oob)/len(oob), sum(obj)/len(obj)]
     file_path = save_path + 'training_metrics.json'
     metrics = dict()
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
             metrics = json.load(jsonfile)
-    CAN_type = 'Traditional CAN' if trad else 'Modified CAN'
-    if CAN_type not in list(metrics.keys()): metrics[CAN_type] = dict()
+    cGAN_type = 'Modified cGAN' if mod else 'Traditional cGAN'
+    if cGAN_type not in list(metrics.keys()): metrics[cGAN_type] = dict()
     keys = ['entropy', 'encoding_err', 'out_of_bounds_err', 'objs_per_area']
     for i,key in enumerate(keys):
-        if key in list(metrics[CAN_type].keys()) and count!=100:
-            metrics[CAN_type][key].append(float(mets[i]))
+        if key in list(metrics[cGAN_type].keys()) and count!=100:
+            metrics[cGAN_type][key].append(float(mets[i]))
         else:
-            metrics[CAN_type][key] = [float(mets[i])]
+            metrics[cGAN_type][key] = [float(mets[i])]
     with open(file_path, 'w') as jsonfile:
         json.dump(metrics, jsonfile)
 
 
-def generate_images(model, seed, epoch, keys, is_can = False, is_trad=False, test_input = None, meta = None):
-    prediction = model([test_input, seed], training=True) if is_can else model(seed, training=False)
-    if is_can:
+def generate_images(model, seed, epoch, keys, is_cgan = False, is_mod=False, test_input = None, meta = None):
+    prediction = model([test_input, seed], training=True) if is_cgan else model(seed, training=False)
+    if is_cgan:
         scaled_pred = rescale_maps(prediction,meta,keys)
         for i in range(len(keys)):
             essentials = scaled_pred[0,:,:,i] if i == 0 else tf.maximum(essentials, scaled_pred[0,:,:,i])
-    display_list = [test_input[0,:,:,i] for i in range(len(topological_maps))] + [essentials] if is_can else [prediction[0,:,:,i] for i in range(len(keys))]
+    display_list = ([test_input[0,:,:,i] for i in range(len(topological_maps))] + [essentials] if is_cgan 
+                    else [prediction[0,:,:,i] for i in range(len(keys))])
 
     plt.figure(figsize=(8, 8))
     for i in range(len(display_list)):
@@ -42,7 +43,8 @@ def generate_images(model, seed, epoch, keys, is_can = False, is_trad=False, tes
         else:
             plt.imshow(display_list[i], cmap='gray') 
         plt.axis('off')
-    loc = 'generated_maps/hybrid/trad_can/' if is_trad else 'generated_maps/hybrid/mod_can/' if is_can else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/'
+    loc = ('generated_maps/hybrid/mod_cgan/' if is_mod else 'generated_maps/hybrid/trad_cgan/' if is_cgan 
+           else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/')
     if not os.path.exists(loc):
         os.makedirs(loc)
     plt.savefig(loc + 'image_at_epoch_{:04d}.png'.format(epoch))
@@ -75,6 +77,8 @@ def generate_loss_graph(train_loss, valid_loss, key, model, sfactor = 10, locati
     plt.plot(train_batch, train_loss, label="train")
     plt.plot(valid_batch, valid_loss, label="validation")
     plt.legend() # must be after labels
+    if not os.path.exists(location):
+        os.makedirs(location)
     plt.savefig(location + key + '_loss_graph')
     plt.close()
 
@@ -87,7 +91,7 @@ def view_maps(maps, keys, meta, split_objs=True, only_objs=True):
                 thingsid = keys.index('essentials')
                 if i!=thingsid:
                     for j in range(n_maps):
-                        plt.subplot(8, n_maps, i*n_maps+j+1)
+                        plt.subplot(2*n_maps, 4, i+j*8+1)
                         plt.imshow(maps[j,:,:,i], cmap='gray')
                         plt.axis('off')
                 else:
@@ -97,7 +101,7 @@ def view_maps(maps, keys, meta, split_objs=True, only_objs=True):
                         for k in range(n_maps):
                             cate_mask = tf.cast(tf.logical_and(maps[k,:,:,thingsid]>min,maps[k,:,:,thingsid]<=max),tf.uint8)
                             cate_objs = maps[k,:,:,thingsid]*cate_mask
-                            plt.subplot(8, n_maps, n_maps+j*n_maps+k+1)
+                            plt.subplot(2*n_maps, 4, i+k*8+j+1)
                             plt.imshow((cate_objs*55/max)+cate_mask*200, cmap='gray')
                             plt.axis('off')
             plt.tight_layout(pad=0.2)

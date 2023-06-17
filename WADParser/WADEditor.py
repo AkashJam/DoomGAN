@@ -32,14 +32,14 @@ class LumpInfo(dict):
     def from_bytes(self, byte_stream):
         self['filepos'], = unpack("i", byte_stream[0:4])
         self['size'], = unpack("i", byte_stream[4:8])
-        self['name'] = Lumps.decode_doomstring(byte_stream[8:16])
+        self['name'] = decode_doomstring(byte_stream[8:16])
         return self
 
     def to_bytes(self):
         info_bytes = bytearray()
         info_bytes += pack("i", self['filepos'])
         info_bytes += pack("i", self['size'])
-        info_bytes += Lumps.encode_doomstring(self['name'])
+        info_bytes += encode_doomstring(self['name'])
         return info_bytes
 
 
@@ -90,7 +90,7 @@ class WAD(dict):
                                  "Please consider copying your WAD() into a new one " \
                                  "using to_bytes and from_bytes methods"
         try:
-            self['header']['identification'] = Lumps.decode_doomstring(byte_stream[0:4])
+            self['header']['identification'] = decode_doomstring(byte_stream[0:4])
             self['header']['numlumps'], = unpack("i", byte_stream[4:8])
             self['header']['infotableofs'], = unpack("i", byte_stream[8:12])
 
@@ -120,9 +120,9 @@ class WAD(dict):
 
                 lump_bytes = byte_stream[lump['filepos']:lump['filepos'] + lump['size']]
 
-                if lumpname in Lumps.known_lumps_classes.keys() and len(lump_bytes) > 0:
+                if lumpname in known_lumps_classes.keys() and len(lump_bytes) > 0:
                     # Got a level lump and need to parse it...
-                    l = Lumps.known_lumps_classes[lumpname]().from_bytes(lump_bytes)
+                    l = known_lumps_classes[lumpname]().from_bytes(lump_bytes)
                     if len(self.levels)>0:  #  otherwise we have found a level lump before the level description, which should not happen
                         self.levels[-1]['lumps'][lumpname] = l
 
@@ -261,7 +261,7 @@ class WADWriter(object):
         # fully specified.
         self.wad = WAD('W')
         self.current_level = None
-        self.lumps = {'THINGS':Lumps.Things(), 'LINEDEFS':Lumps.Linedefs(), 'VERTEXES':Lumps.Vertexes(),'SIDEDEFS': Lumps.Sidedefs(), 'SECTORS':Lumps.Sectors()}  # Temporary lumps for this level
+        self.lumps = {'THINGS':Things(), 'LINEDEFS':Linedefs(), 'VERTEXES':Vertexes(),'SIDEDEFS': Sidedefs(), 'SECTORS':Sectors()}  # Temporary lumps for this level
         self.scale_factor = scale_factor
 
     def _sector_orientation(self, vertices):
@@ -294,8 +294,8 @@ class WADWriter(object):
             thingsmap = io.imread(thingsmap).astype(np.uint8)
 
         walkable = np.logical_and(floormap, np.logical_not(wallmap)) if wallmap is not None else floormap
-        walkable = morphology.remove_small_objects(walkable)
-        walkable = morphology.remove_small_holes(walkable)
+        # walkable = morphology.remove_small_objects(walkable)
+        # walkable = morphology.remove_small_holes(walkable)
 
         roommap, graph, metrics = topological_features(walkable, prepare_for_doom=True)
         graph = self.decorate_graph(graph, roommap, heightmap, thingsmap)
@@ -316,8 +316,10 @@ class WADWriter(object):
         # Connected components (floors)
 
         H = G.copy()
+        # print(G)
         H.remove_node(0)
         floors = sorted(nx.connected_components(H), key=len, reverse=True)
+        # print(floors)
         level_solution = list()
         corrected_heights = dict()
 
@@ -339,7 +341,8 @@ class WADWriter(object):
                     paths += [[n]]
 
             floor_solution = max(paths, key=len)
-            level_solution.append(floor_solution)
+            if floor_rooms==max(floors, key=len):
+                level_solution.append(floor_solution)
 
             # Fixing the heights along all paths so every path becomes walkable
             for path in paths:
@@ -367,7 +370,7 @@ class WADWriter(object):
                 nx.set_node_attributes(G, {floor_path[0]: {"location": (x, y)}}, "floor_start")
             if id == len(level_solution)-1:
                 # This is the last floor to visit, place the level exit
-                possible_places = np.stack(np.where(roommap == floor_path[0]), axis=1)
+                possible_places = np.stack(np.where(roommap == floor_path[-1]), axis=1)
                 random_pixel_index = np.random.choice(possible_places.shape[0])
                 x, y = possible_places[random_pixel_index]
                 nx.set_node_attributes(G, {floor_path[-1]: {"location": (x, y)}}, "level_exit")
@@ -509,6 +512,7 @@ class WADWriter(object):
         for n, l_exit in nx.get_node_attributes(graph, "level_exit").items():
             x, y = self._rescale_coords(l_exit["location"])
             self.add_level_exit(x, y, inside=int(n), floor_height=int(graph.nodes[n]["height"])-16, ceiling_height=128+int(graph.nodes[n]["height"])-16)
+            print("Setting Exit at {},{}".format(x,y))
 
     def add_teleporter_destination(self, x, y):
         self.add_thing(x, y, thing_type=14)
@@ -675,7 +679,7 @@ class WADWriter(object):
         self.wad.add_lump('SIDEDEFS', self.lumps['SIDEDEFS'])
         self.wad.add_lump('VERTEXES', self.lumps['VERTEXES'])
         self.wad.add_lump('SECTORS', self.lumps['SECTORS'])
-        self.lumps = {'THINGS':Lumps.Things(), 'LINEDEFS':Lumps.Linedefs(), 'VERTEXES':Lumps.Vertexes(),'SIDEDEFS': Lumps.Sidedefs(), 'SECTORS':Lumps.Sectors()}
+        self.lumps = {'THINGS':Things(), 'LINEDEFS':Linedefs(), 'VERTEXES':Vertexes(),'SIDEDEFS': Sidedefs(), 'SECTORS':Sectors()}
 
     def add_level(self, name='MAP01'):
         # If it's not the first level, then commit the previous
