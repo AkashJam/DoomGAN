@@ -24,7 +24,7 @@ def plot_train_metrics(save_path = 'eval_metrics/'):
             for key in list(metrics[cGAN_types[0]].keys()):
                 if 'loss' not in key:
                     for cGAN_type in cGAN_types:
-                        steps = [stp*100 for stp in list(range(len(metrics[cGAN_type][key])))]
+                        steps = [stp*1023 for stp in list(range(len(metrics[cGAN_type][key])))]
                         plt.xlabel('Number of Steps')
                         plt.ylabel(key)
                         plt.plot(steps, metrics[cGAN_type][key] , label=cGAN_type)
@@ -104,107 +104,12 @@ def calc_stats(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
         plt.close()
 
 
-def sliding_window_slicing(a, no_items, item_type=0):
-    """This method perfoms sliding window slicing of numpy arrays
-
-    Parameters
-    ----------
-    a : numpy
-        An array to be slided in subarrays
-    no_items : int
-        Number of sliced arrays or elements in sliced arrays
-    item_type: int
-        Indicates if no_items is number of sliced arrays (item_type=0) or
-        number of elements in sliced array (item_type=1), by default 0
-
-    Return
-    ------
-    numpy
-        Sliced numpy array
-    """
-    if item_type == 0:
-        no_slices = no_items
-        no_elements = len(a) + 1 - no_slices
-        if no_elements <=0:
-            raise ValueError('Sliding slicing not possible, no_items is larger than ' + str(len(a)))
-    else:
-        no_elements = no_items                
-        no_slices = len(a) - no_elements + 1
-        if no_slices <=0:
-            raise ValueError('Sliding slicing not possible, no_items is larger than ' + str(len(a)))
-
-    subarray_shape = a.shape[1:]
-    shape_cfg = (no_slices, no_elements) + subarray_shape
-    strides_cfg = (a.strides[0],) + a.strides
-    as_strided = np.lib.stride_tricks.as_strided #shorthand
-    return as_strided(a, shape=shape_cfg, strides=strides_cfg)
-
-
-def calc_spatial_homogenity(maps,threshold=1,gen=True):
-    floor_id = keys.index('floormap')
-    things_id = keys.index('essentials')
-    position = [n for n in range(256)]
-    for i in range(maps.shape[0]):
-        map = (maps[i,:,:,floor_id]>0).astype(int)
-        empty_space = np.logical_and(np.logical_not(maps[i,:,:,things_id]>0),map).astype(int)
-        x_min = max(position, key= lambda x: map[x,:].any()*(256-x))
-        x_max = max(position, key= lambda x: map[x,:].any()*x)
-        y_min = max(position, key= lambda y: map[:,y].any()*(256-y))
-        y_max = max(position, key= lambda y: map[:,y].any()*y)
-        min_side = min(x_max-x_min,y_max-y_min)
-        window_sizes = np.linspace(2,min_side,num=20).astype(int).tolist()
-        cropped_empty_space = empty_space[x_min:x_max,y_min:y_max]
-        cropped_map = map[x_min:x_max+1,y_min:y_max+1]
-        # print(empty_space.shape, cropped_empty_space.shape)
-        # window_sizes = [i for i in range(2,max_size,2)]
-        for ws in window_sizes:
-            y = sliding_window_slicing(cropped_empty_space, no_items=ws, item_type=1)
-            map_y = sliding_window_slicing(cropped_map, no_items=ws, item_type=1)
-            for j in range(y.shape[0]):
-                Ty = np.transpose(y[j,:,:])
-                z = sliding_window_slicing(Ty, no_items=ws, item_type=1)
-                map_ty = np.transpose(map_y[j,:,:])
-                map_z = sliding_window_slicing(map_ty, no_items=ws, item_type=1)
-                slices = z if j == 0 else np.concatenate((slices,z))
-                map_slices = map_z if j == 0 else np.concatenate((map_slices,map_z))
-            valid_w = 0
-            for j in range(slices.shape[0]):
-                valid_slice = np.sum(map_slices[j,:,:])/ws**2 == threshold
-                if valid_slice:
-                    fill = np.sum(slices[j,:,:])/np.sum(map_slices[j,:,:])
-                    empty = fill if fill == threshold else 0
-                    wslice_homogenity = [empty] if valid_w == 0 else wslice_homogenity+[empty]
-                    valid_w += 1
-            if valid_w == 0: 
-                break
-            else:
-                w_homogenity = sum(wslice_homogenity)/valid_w
-                map_homogenity = [w_homogenity] if window_sizes.index(ws) == 0 else map_homogenity+[w_homogenity]
-                print(ws,w_homogenity)
-        print(sum([map_homogenity[k]/(len(map_homogenity)-k) for k in range(len(map_homogenity))]),ws,np.sum(map),min_side)
-        # plt.subplot(1,2,1)
-        # plt.imshow(cropped_empty_space)
-        # plt.subplot(1,2,2)
-        # plt.imshow(cropped_map)
-        # plt.show()    
-
-
 def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):  
     test_radii = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]               
     rlevel_areas, rlevel_ripk = calc_RipleyK(real, keys, test_size, test_radii)
     wlevel_areas, wlevel_ripk = calc_RipleyK(wgan, keys, test_size, test_radii)
     htlevel_areas, htlevel_ripk = calc_RipleyK(hybrid_trad, keys, test_size, test_radii)
     hmlevel_areas, hmlevel_ripk = calc_RipleyK(hybrid_mod, keys, test_size, test_radii)
-    
-    # accr_ripk = [np.array([ripk[i] for ripk in rlevel_ripk]) * np.array(rlevel_areas) for i in range(len(test_radii))]
-    # acch_ripk = [np.array([ripk[i] for ripk in hlevel_ripk]) * np.array(hlevel_areas) for i in range(len(test_radii))]
-    # accw_ripk = [np.array([ripk[i] for ripk in wlevel_ripk]) * np.array(wlevel_areas) for i in range(len(test_radii))]
-
-
-    # print('real: {} hybrid: {} wgan: {}'.format(sum([sum([ripk[i] for ripk in np.array(accr_ripk).T.tolist()])/len(rlevel_areas) for i in range(len(test_radii))])/len(test_radii), 
-    #                                             sum([sum([ripk[i] for ripk in np.array(acch_ripk).T.tolist()])/len(hlevel_areas) for i in range(len(test_radii))])/len(test_radii), 
-    #                                             sum([sum([ripk[i] for ripk in np.array(accw_ripk).T.tolist()])/len(wlevel_areas) for i in range(len(test_radii))])/len(test_radii)))
-    
     
     print('real: {} wgan: {} hybrid_trad: {} hybrid_mod: {}'.format([sum([ripk[i] for ripk in rlevel_ripk])/len(rlevel_areas) for i in range(len(test_radii))], 
                                                 [sum([ripk[i] for ripk in wlevel_ripk])/len(wlevel_areas) for i in range(len(test_radii))],
@@ -272,14 +177,13 @@ if __name__ == "__main__":
         noise = tf.random.normal([b_size, 256, 256, 1])
         wgan_maps, keys = wgan_fmaps(trad_wgen, z, map_meta)
         hybrid_trad_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_trad_cgen, z, noise, map_meta)
-        hybrid_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_mod_cgen, z, noise, map_meta)
+        hybrid_mod_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_mod_cgen, z, noise, map_meta)
         real_maps = np.stack([data[m] for m in keys], axis=-1)
         r_maps = np.concatenate((r_maps,real_maps), axis=0) if i != 0 else real_maps
         w_maps = np.concatenate((w_maps,wgan_maps.numpy()), axis=0) if i != 0 else wgan_maps.numpy()
         ht_maps = np.concatenate((ht_maps,hybrid_trad_maps.numpy()), axis=0) if i != 0 else hybrid_trad_maps.numpy()
-        hm_maps = np.concatenate((hm_maps,hybrid_maps.numpy()), axis=0) if i != 0 else hybrid_maps.numpy()
-        if i==2: break
-    # calc_spatial_homogenity(w_maps)
+        hm_maps = np.concatenate((hm_maps,hybrid_mod_maps.numpy()), axis=0) if i != 0 else hybrid_mod_maps.numpy()
+        if i==1: break
     calc_proportions(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
     calc_stats(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
     plot_RipleyK(r_maps,w_maps,ht_maps,hm_maps)
