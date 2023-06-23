@@ -127,7 +127,7 @@
 \frontmatter % Use roman page numbering style (i, ii, iii, iv...) for the preamble pages
 
 \puttitle{
-	title=Procedural Generation of DOOM Levels, % Title of the thesis
+	title=Procedural Decoration of DOOM Levels with Generative Adversarial Networks, % Title of the thesis
 	name=Akash Aloysius James, % Author Name and Surname
 	course=Ingegneria Informatica, % Study Programme (in Italian)
 	ID  = 10687690,  % Student ID number (numero di matricola)
@@ -152,7 +152,7 @@ rules to govern the system. It is meant to enhance the level building process by
 upgrading the process of including content within the generated DOOM levels. The initial 
 objective is to produce a coherent topology, accompanied by a suitable availability and 
 positioning of game objects with respect to the level layout. This requires addressing 
-complications that impede consistent representation and generation from the precious 
+complications that impede consistent representation and generation from the previous 
 design. Then the modifications are compiled together to fashion a generative system 
 that can construct the minimum sufficient subset of features used to design a unique level. 
 Finally, a comparison is made between the modified system and the prior architecture to 
@@ -162,6 +162,12 @@ among them and those available in the repository. The outcome of these experimen
 should prove a degree of competence in the system’s ability for level design and act 
 as a practical alternative for the implementation of procedural content generation for 
 games to come.
+\\
+\\
+
+% ABSTRACT IN ITALIAN
+\chapter*{Abstract in lingua italiana}
+Questa tesi esamina come automatizzare il popolamento di livelli generati proceduralmente utilizzando delle Conditional Adversarial Networks. L'obiettivo è generare oggetti di gioco in modo tale da imitare dal punto di vista funzionale  le caratteristiche di quelli presenti nei livelli progettati dall'uomo, senza la necessità di definire esplicitamente un insieme esaustivo di regole a questo scopo. L'obbiettivo è migliorare il processo di creazione dei livelli, potenziando il processo di inserimento di contenuti all'interno dei livelli generati di DOOM. L'obiettivo iniziale è produrre una topologia coerente, accompagnata da una disponibilità e posizionamento adeguati degli oggetti di gioco rispetto alla struttura del livello. Ciò richiede di affrontare complicazioni che ostacolano la rappresentazione e la generazione di contenuti coerenti a partire dal design originale. Successivamente, le componenti progettate vengono combinate per creare un sistema generativo in grado di costruire il sottoinsieme minimo sufficiente di caratteristiche utilizzate per progettare un livello unico. Infine, viene effettuato un confronto tra il sistema modificato e i precedenti lavori per evidenziare i miglioramenti che offre rispetto a quanto era precedentemente possibile. I livelli generati sono stati valutati in modo da evidenziare le differenze con i livelli disponibili nel repository. Il risultato di questa analisi sperimentale consente di dimostrare un certo grado di competenza del sistema nella progettazione dei livelli, offrendo un'alternativa pratica per l'implementazione della generazione procedurale di contenuti per i giochi futuri.
 \\
 \\
 
@@ -240,30 +246,30 @@ procedural system. The notion of randomly generating levels solely utilizing exi
 assets at each instance appears more and more appealing as an alternative to 
 constructing complex game worlds as it avoids excessive dependence on content 
 design. This is especially true for newer games as there is greater demand for more 
-content while maintaining graphics at a high fidelity. AAA Titles such as Civilization 
-\cite{MiP96} use seeds in complex models to create different worlds for players to 
-traverse and explore based on random seeds while No Man’s Sky \cite{HaG16} progressively 
-generates entire galaxies, including stars and planets with flora, fauna, and even 
-sentient alien encounters upon discovery.
+content while maintaining graphics at a high fidelity. AAA titles such as Civilization 
+\cite{MiP96} use random seeds in complex models to create different worlds for players to 
+traverse and explore based on variation of terrain and resource placements while No Man’s Sky 
+\cite{HaG16} progressively generates entire galaxies, including stars and planets with flora, 
+fauna, and even alien encounters upon discovery.
 
 \section{Problem}
 \label{sec:problem}
 While procedural generation is not new, it is an exhaustive process which requires 
 consideration of minute details when building the system. AI has been developed for 
-games, such as playing Infinite Super Mario levels \cite{KaS12} but have been less proficient when it 
-cams to replicating creative tasks such as level design as the sample space natively 
+games, such as playing Infinite Super Mario levels \cite{KaS12} but have been less proficient 
+when it comes to replicating creative tasks such as level design as the sample space natively 
 adds a greater degree of complexity to the problem. In an attempt to avoid these 
 pitfalls and consume vast amounts of resources for creating multiple levels, 
 exploring deep learning seems to be a favorable course of action. There is a detailed 
 method that is capable of generating DOOM level given certain input criteria 
-through the use of Wasserstein Generative Adversarial Networks with Gradient Penalty 
+through the use of conditional Wasserstein Generative Adversarial Networks with Gradient Penalty 
 (WGAN-GP) \cite{MaA17} and the help of a large 
 repository of custom-made levels created by the community to train the model. 
 While the level layout generated by this model has proven adequate for a  
-First Person Shooter (FPS), it is unable to place appropriate game objects into the level layout as it is plagued 
-with disproportionate generation of game object among the present categories and with
-biased placements, causing them to clump together in certain sections of the 
-level. This results in levels unevenly saturated and biased towards certain types of 
+First Person Shooter (FPS), it is unable to place appropriate game objects into the level layout. 
+This is because it is plagued with disproportionate generation of game object among the present 
+categories and is biased with their placements as it clumps them together in certain sections of the 
+level. This results in levels being unevenly saturated and predisposed towards certain types of 
 game objects which hampers the level’s ability to properly captivate the player’s 
 interest.
 
@@ -309,7 +315,7 @@ outlining how they function.
 Artificial Intelligence in Video Games for the most part has referred to the behavior 
 of non-playable characters, but it has been used for much more such 
 as simulating the player or controlling in game systems \cite{JiL20,DaK21}. The 
-Mario AI competitions \cite{KaS12} saw the mainstream adoption of reinforcement learning 
+Mario AI competitions \cite{KaS12} saw the mainstream adoption of Reinforcement Learning 
 (RL) towards simulating the player's behavior with similar models outperforming 
 human players in DOOM while also being able to navigate unknown maps \cite{GuL16}. 
 On the other hand, Convolutional Neural Networks (CNN) have been used to predict the 
@@ -322,10 +328,10 @@ planner proposed  to train agents to maximize the city population in the game Si
 using RL fractal networks which is further generalized to larger maps by means of a  
 CNN with structured skip connections \cite{SaE20}. Mapping and texture design has 
 also been widely researched with one such proposal entailing a two-stage GAN framework 
-that can be randomly generate height maps as well as infer texture maps from data 
+that can randomly generate height maps as well as infer texture maps from data 
 provided by the NASA ‘Visible Earth’ project \cite{ChB17}. Its architecture consists of a Deep 
 Convolutional GAN (DCGAN) used to generate the height maps with a Conditional Generative
-Adversarial Network (cGAN) for image to-image translation to produce the textures from the 
+Adversarial Network (cGAN) for image to image translation to produce textures from the 
 provided height maps. 
 
 \section{State of the Art}
@@ -348,17 +354,17 @@ obtain specific results. Recent advances set forth by the advent of Diffusion Mo
 systems such as ‘DALL-E’ and 'Stable Diffusion' that can capture patterns through sequentially denoising 
 autoencoders \cite{RoR22}, producing images using text-based cues at a quality never seen before. These 
 have been used from reconstruction of medical images to the restoration and inpainting of video segments to 
-reconstruct missing or damaged regions in an image. It has also been used generate future frames by predicting 
-through an inverse diffusion process \cite{LiY22}. 
+reconstruct missing or damaged regions in an image. It has also been used to generate future frames by predicting 
+the following image in a sequence through an inverse diffusion process \cite{LiY22}. 
 
-These improvements have also been seen in the fields of computer vision with 2D and 3D detection capable of 
-unified representation introduced by YOLOR \cite{ChW21}, empowering system by including implicit knowledge 
-that serve various tasks to allow them to learn multiple tasks such as object detection, multi-class labeling and 
+These improvements have also been seen in the fields of computer vision with 2D and 3D detection capable of using a
+unified representation introduced by YOLOR \cite{ChW21}, empowering systems by including implicit knowledge 
+that serve various actions to allow them to learn multiple tasks such as object detection, multi-class labeling and 
 feature embedding all at once. Graph based models have reached a level that can more directly impact medical 
 applications with the predictions of drug interactions. The DSN-DDI \cite{ZiL23} shows much promise as it has 
-proven its ability through consistently predicting interactions from eeven unseen drugs while also being able to combine 
-drugs effectively by means of a dual view representation and can serve as a generalized framework for the discovery 
-of novel drugs and alleviate resources wasted on unproductive clinical trials.
+proven its ability to consistently predict interactions on even unseen drugs while also being able to combine 
+drugs effectively by means of its dual view representation. It is capable of serving as a generalized framework for 
+the discovery of novel drugs and alleviate resources wasted on unproductive clinical trials.
 
 \section{Literature Review on Procedural Generation of Game Levels}
 Hendrikx et al. provides a historical survey of methods that have been used for 
@@ -366,8 +372,8 @@ procedural generation for a variety of content in games, including isolated leve
 \cite{MaH13}. Some of the earlier games surveyed include NPPAngband, an Angband 
 variant, which introduces fractal-based algorithms such as cellular automata for generating 
 caves imitating indoor level design. Many of these algorithms consisted of generative 
-grammars or pseudo random number generator combined with an advanced 
-parameter space search such as a genetic algorithm, often relying on a grid-based 
+grammars or pseudo random number generators combined with an advanced 
+parameter space search such as genetic algorithms, often relying on a grid-based 
 structures to generate these levels. Togelius et al. defines a taxonomy using 
 evolutionary/stochastic based optimization algorithms and provides guidelines on 
 how to approach the problem of representation and evaluation \cite{JuT11}.
@@ -379,7 +385,7 @@ to an auto-encoder which manufactures instances based on the learned design
 pattern. A similar architecture is used for rhythm-based games in Dance Dance 
 Gradation to invent new levels with different degrees of difficulty based on acoustic 
 features obtained from the audio track using a CNN \cite{YuT18}. Another approach that has 
-been taken is training the agents by modeling content generation as a Markov 
+been taken is training agents by modeling content generation as a Markov 
 Decision Process to design levels of Zelda and Sokoban using various representations 
 based on the autonomy the agent is given \cite{AhK20}.
 
@@ -410,7 +416,7 @@ minimize the discriminator’s ability to differentiate it from the real samples
 \min_{\{G\}}\max_{\{D\}} \mathop{{}\mathbb{E}}_{x\sim p_{data}(x)}[logD(x)]+ \mathop{{}\mathbb{E}}_{z\sim p_{z}(z)}[log(1-D(G(z)))]
 \end{equation}
 The two networks are trained simultaneously through gradient descent performed
-over the loss which is calculated iteratively and is back-propagated over to the
+over the loss which is calculated iteratively, then back-propagated over to the
 network’s weights and biases until a local minimum is achieved. This is done by 
 estimating lower-order moments $\hat{m}$ and $\hat{v}$ via an Adam optimizer that uses 
 stochastic gradient descent with $\alpha$ as the step size and $\theta_{0}$ being the initial parameter 
@@ -483,10 +489,10 @@ independently.
 \newpage
 
 \subsection{U-Net}
-A convolutional classification network consisting of contracting path to capture context followed by symmetrically 
-expanding path that enables localization \cite{OlR15} and concatenates the corresponding 
-features from the contracting path. The network’s loss is computed with a pixel-wise soft-max through the 
-use of a cross-entropy loss function. The activation $a_{k}$ for the set of classes $K$ at the pixel position 
+U-Nets are convolutional classification networks consisting of a contracting path to capture context followed 
+by a symmetrically expanding path that enables localization \cite{OlR15} and concatenates the corresponding 
+features from the contracting path. The network’s loss is computed with a pixel-wise softmax through the 
+use of a cross entropy loss function. The activation $a_{k}$ for the set of classes $K$ at the pixel position 
 $x$ is used to approximate a maximum function $p_{k}(x)$ that is meant to identify the true class for 
 the image by bringing the results of the class with the maximum activation closer to 1 
 while dropping the output for the remainder of the classes near to 0.
@@ -498,17 +504,17 @@ E = \sum_{x\in\omega} w(x)log(p_{\ell(x)}(x))
 \end{equation}
 The cross entropy then penalizes at each position the deviation of the activation $p_{\ell(x)}$ 
 from the true label $\ell$ for each pixel and uses a pre-computed weight map $w$ to give more 
-importance to certain pixels and compensate for the different frequency of pixels in the dataset 
+importance to certain pixels, compensating for the different pixel frequencies in the dataset 
 while the network is training. The initial parameter weights are drawn from a Gaussian distribution 
-such that features has approximately unit variance. It is optimized through minimizing the Euclidean 
+such that features have approximately unit variance. It is optimized through minimizing the Euclidean 
 distance by averaging all plausible outputs with high momentum to ensure that the current optimization 
 step is more based towards previously seen training samples.
 
 \subsection{Conditional Generative Adversarial Networks}
 Unlike conventional GANs, cGANs use a U-Net based architecture as its generator to 
-perform image-to-image translations by mapping input images $x$ towards the 
+perform image to image translations by mapping input images $x$ towards the 
 desired output images $y$ using the noise $z$. It employs an $L1$ loss that can accurately 
-capture the low frequencies but produces blurry results since it cannot capture high frequency 
+capture low frequency information but produces blurry results since it cannot capture its high frequency 
 sharpness. Thus, a Patch classifier is also incorporated which only penalizes structure at the scale 
 of image patches to model high frequency structures. 
 \begin{equation} \label{eq:l1loss}
@@ -517,17 +523,16 @@ L_{L1}(G) =  \mathop{{}\mathbb{E}}_{x,y,z}[\|y-G(x,z)\|_{1}]
 \begin{equation} \label{eq:patchloss}
 L_{cGAN}(G,D) =  \mathop{{}\mathbb{E}}_{y}[logD(x,y)] +  \mathop{{}\mathbb{E}}_{x,z}[log(1-D(x,G(x,z)))]
 \end{equation}
-This tackles the issues of blurriness by classifying patches of an image as real or generated by running 
-the discriminator convolutionally across the image, assuming independence between pixels separated 
-by more than a set patch diameter and averaging all its responses \cite{PhI17}. The objective is
-realized as a min-max game similar to the GAN with conditional inputs to its networks and an additional 
-$L1$ loss that is amplified through $\lambda$
+This tackles the issues of blurriness by classifying patches of an image as real or generated and running 
+the discriminator convolutionally across the image, averaging all its responses while assuming pixels 
+separated by more than a set patch diameter are independent \cite{PhI17}. As such a network 
+requires low-level information shared between the input and output, it uses small 
+batches with high momentum while retaining batch normalization and dropout. The final objective is
+realized as a min-max game similar to that of the GAN with the inclusion of conditional inputs in both of its networks 
+and an additional $L1$ loss that is amplified through $\lambda$.
 \begin{equation} \label{eq:cganminmax}
 \min_{G}\max_{D}L_{cGAN}(G,D)+\lambda L_{L1}(G)
 \end{equation}
-As such a network 
-requires low-level information shared between the input and output, it uses small 
-batches with high momentum while retaining batch normalization and dropout. 
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{cgan_results.jpg}
@@ -539,16 +544,16 @@ batches with high momentum while retaining batch normalization and dropout.
 \label{ch:representation and prior design}%
 
 \section{DOOM}
-In this thesis, the experiments are built around the game Doom \cite{IdS93} and was pivotal in 
+In this thesis, the experiments are built around the game Doom \cite{IdS93} which was pivotal in 
 the establishment of the FPS genre, putting forward novel techniques for 3D graphics as well as 
 initiating support for custom modifications in its level format through its ports. It spawned 
 dozens of copies, now called  ‘DOOM Clones’ with Figure~\ref{fig:doomclones} showing that more 
 than half the code base is cloned in certain older titles \cite{YaC14}. As one of the earliest 3D games, 
 DOOM is a viable subject due to its many freely accessible custom levels that has been developed by 
 the community over the years which are still tracked by websites such as ‘Doomworld’. It also benefits 
-from its simpler 2D representation despite its 3D player environment, drastic simplifying its representation 
-and subsequently reducing the computational costs due to the reduced sample space. This also benefits 
-from with widely available and detailed documentations, enabling it to be easily parsed.
+from its simpler 2D representation despite its 3D player environment, drastic simplifying the structures used to model 
+and subsequently reducing the computational costs with its reduced sample space. This also benefits 
+from widely available and detailed documentations, enabling it to be easily parsed and reverse engineered.
 \begin{figure}[H]
     \centering
     \includegraphics[width=0.7\textwidth]{doom_clones.jpg}
@@ -602,11 +607,11 @@ Variable & Lumps & - & Lump Data & Lumps stored as a byte stream\\
 All the information that is used to define a level can be found within their respective
  lumps with each designated to a specific component of the level structure. The lumps 
 defined in the Table~\ref{table:uniquelumps} and Table~\ref{table:derivablelumps} represent 
-mandatory lumps present in every WAD deemed acceptable by the DOOM engine to 
-build the level. Most entries are partitioned into a set of fields with multiple entries in different lumps 
-sometimes used to define a single entity. It also provides the necessary metadata to 
-signify special effects through fields allotted for flags that are present in all unique 
-lumps except for name and vertexes.
+all of the mandatory lumps that should be present in every WAD to be deemed acceptable by the 
+DOOM engine. Most lumps partition its entries into a set of fields with multiple entries in different lumps 
+sometimes used to define a single entity. It also provides the necessary metadata that is used to 
+signify special effects through fields allotted for flags that are present in all the unique 
+lumps mentioned except for name and vertexes.
 
 \begin{table}[H]
 \centering 
@@ -615,22 +620,21 @@ lumps except for name and vertexes.
 \textbf{Lump Name} &\multicolumn{1}{c|}{\textbf{Description}} & \textbf{Entry Size (bytes)} & \textbf{No. of Fields} \\
 \hline
 NAME & The IWAD level name as an ‘ExMy’ label where ‘x’ is the episode number and ‘y’is the mission 
-number for DOOM & 2 & 1 \\
+number & 2 & 1 \\
 \hline
-THINGS & A list of game objects in the level that are not a walls, pavements or doors, identified using 
-an index with its position and 
-orientation & 10 & 5 \\
+THINGS & A list of every game object present that is not a wall, pavement or door, identified using 
+an index with its position and orientation & 10 & 5 \\
 \hline
 LINEDEFS & A list of every line needed to signify all the walls, steps, and invisible boundaries such as 
 event triggers that shape the level & 14 & 7 \\
 \hline
-SIDEDEFS & A list of wall textures referenced which specify the sector number that it is facing, implicitly 
-defining the sector boundaries & 30 & 6 \\
+SIDEDEFS & A list of referenced wall textures, specifying the sector that it faces and implicitly 
+defining the sector's boundaries & 30 & 6 \\
 \hline
 VERTEXES & A list of x and y map coordinates that are referenced by linedef entries to create shapes on 
 the map & 4 & 2 \\
 \hline
-SECTORS & A list of closed areas with the same textures as well as floor and ceiling height. Additional 
+SECTORS & A list of closed areas with the same floor and ceiling textures as well as height. Additional 
 fields describe its lighting and the floor’s special effects that usually damage the player & 26 & 7 \\
 \hline
 \end{tabular}
@@ -641,14 +645,13 @@ fields describe its lighting and the floor’s special effects that usually dama
 \newpage
 
 The level building process begins through the designation of an individual sector 
-and iterative laying out its components until all the sectors are rendered. Sectors are 
-constructed using the relevant linedefs that are obtained through sidedef entries that 
+and iteratively laying out its components until all the sectors are rendered. Sectors are 
+constructed using the relevant linedefs which are obtained through associated sidedef entries that 
 reference the respective sector. Linedefs are defined using two entries from the 
-vertex lump and can mention only a right sidedef for boundary walls. When 
-connecting two sectors, linedefs will mention both sidedefs and can act as triggers 
-using the corresponding flag. 
+vertex lump and can either mention only a right sidedef for boundary walls or also a left sidedefs when 
+connecting two sector which can both be transparent to act as triggers using the corresponding flag . 
 
-There are certain constraints to the formation of lumps used such 
+There are certain constraints to the formation of lumps such 
 as the presence of exactly one name lump in every WAD and the inability to render 
 sectors above or below another since it uses a 2D map. Other functional lumps can be
 derived from the former using 3rd party software and serve to speed up the rendering 
@@ -688,8 +691,8 @@ overall structure of the level and decide what needs to be shown by taking into
 account the player position and sorting the sub-sectors that are supposed to be 
 visible to user. This is achieved by using the sub-sectors composed of segments as 
 nodes in the graph that are rearranged every time the player moves through 
-partition lines that divide the map and get progressively smaller for each child until 
-all sub-sections have been encompassed.
+partition lines that divide the map and get iteratively smaller for each child until 
+all sub-sectors have been encompassed.
 
 Some of the derivable lumps have more unique structures such as the reject which 
 expects byte sized entries with each bit representing visibility from a sector and the 
@@ -788,7 +791,7 @@ The generative network has five hidden layers which comprise of one linear layer
 convolutional layers with a final convolutional output layer applying a sigmoid activation 
 function as it better coincides with the target format. It uses the feature vectors 
 accompanied by a gaussian noise vector as input and learns its distribution while the 
-critic uses the real feature maps and the generated ones grasp the differences
+critic uses the real feature maps and the generated ones to grasp the differences
 between them given those feature vectors. The model’s predictions are then 
 evaluated based on the Wasserstien distance from its expected value. The parameters 
 are then adjusted using an Adam Optimizer with the generated levels compared 
@@ -818,12 +821,12 @@ three are needed as backgrounds for the episode end texts. The last is what is s
 outside the border of the display window when not being run in full screen.
 
 \subsection{Drawbacks}
-Due to the use of interpolation techniques to resize the image into identical shapes, 
+Due to the use of interpolation techniques to resize the image into identical sizes, 
 the information within the images is not exactly translated when performing such 
 transformations. Effects of distortion and blurring can be addressed or ignored 
 during the dataset preparation for the topological maps as the variation is consistent 
 in the height map while the floor and wall maps are indifferent to exact pixel values. 
-Sparse images such as the things map that depend on the pixel encoded values are 
+Sparse images such as the things map that depend on the pixel encoded values on the other hand are 
 contorted beyond permissible levels of tolerance, making it to be difficult to 
 maintain its integrity. In the case of the things map, this has the effect of pixels taking 
 on the value of other objects, coercing them towards objects with lower assigned ids. 
@@ -839,7 +842,7 @@ the list regardless of category, further dissociating the relations between obje
 compared to its resized counterpart (below)}
     \label{fig:featuremapistakes}
 \end{figure}
-Maps smaller than the target size of 128 by 128 pixels on the other hand must be 
+Maps smaller than the target size of 128 by 128 pixels meanwhile must be 
 enlarged to compensate for the lack of area which leads to objects being represented 
 through the multiple surrounding pixels, further deteriorating the quality of the 
 map. It also leads to large empty spaces throughout the level which can throw of the 
@@ -991,14 +994,14 @@ the implemented model.
 \section{Dataset Procurement}
 The data used to train and validate the models is obtained by scraping custom made 
 doom levels from 'doomworld.com', a source mirror of Idgames Archive. A scraper 
-is made to access the domain and iterates over the webpages of the available levels 
+is made to access the domain and iterate over the web pages of the available levels 
 within each subcategory present excluding ‘Deathmatch’, ‘Megawads’ and ‘Ports’.
 This choice has been made to avoid mixing different types of levels as player vs 
 player environments are structurally different from player vs enemy environments. 
 Ports has been ignored because it requires modifying the game engine to run the 
 level which is complicated to characterize in a format decipherable by the model and 
 stably implement into PWADs. The web scraper then downloads WADs and stores 
-the relevant information in a JSON file which doubles as register to catalogue the 
+relevant information in a JSON file which doubles as a register to catalog the 
 collection at hand. 
 
 Among the custom levels present in Doomworld’s repository, 1969 of the available 
@@ -1009,7 +1012,7 @@ representation. Similarly, constraints have been placed on the levels to ensure 
 faithfulness to the genre is respected such as accepting only those that contain at least 
 one monster and weapon to improve the overall consistency within the dataset. 
 Finally, to forgo the intricacies that arises with teleporters, levels that have large, 
-detached segments have not been included leaving only the remaining 1279 levels
+detached segments have not been included, leaving only the remaining 1279 levels
 which are taken into consideration and included in the finalized dataset. The WADs 
 that have been determined to meet the desired criteria are then parsed and have its 
 feature maps extracted to serve as the training data for the models.
@@ -1070,7 +1073,7 @@ X_{Gen} = G(Z)
 
 The critic $C$ uses an identical architecture in the same manner with the only difference 
 being that it operates on three feature maps. It processes the maps with its hidden 
-layers iteratively through repetitive steps of down convolution followed by layer 
+layers progressively through repetitive steps of down convolution followed by layer 
 normalization and Leaky ReLU activation until it is finally condensed into a single 
 output assigning the map belonging either to the real distribution $Y_{True}$ and the generated 
 distribution $Y_{Gen}$ to a value between 0 and 1. It is equivalent to the logits functions 
@@ -1088,8 +1091,8 @@ layer to project the noise into a larger tensor. The tensor is then reshaped int
 8 by 8 images which are then expanded through a series of up convolutions until the 
 final output layer produces a floor, wall, and height maps for the generated level of 
 pixel size 256 by 256. A sigmoid activation function is used in the output layer instead of 
-the orthodox tanh function as it is more appropriate as the constraint the feature 
-maps lie within the normalized limits. 
+the orthodox tanh function as it is more appropriate since the constraints the feature 
+maps lie between have been normalized. 
 
 \subsection{Functional Generator}
 The module is based on Isola et al.’s Conditional Adversarial Network with 
@@ -1115,15 +1118,15 @@ function for the generator output layer, a ReLU activation function
 has been used as it has proved to provide better image translation. The generator loss 
 function has also been modified to account for the problem's parameters and as such 
 it contains the adversarial loss i.e binary cross entropy but has the $L1$ loss substituted 
-with the sum of the object and mask loss which is explained in greater detail in the 
-next section.
+with the and mask loss which is explained in greater detail in the next section.
 
-The discriminator classifies the samples from the real distribution much like that of 
-the WGAN-GP with the only difference being its Binary Cross Entropy loss function.
-Both the generator and discriminator of the conditional adversarial network use 
-modules of the form convolution, followed by batch normalization and a RelU activation 
-when upscaling or a Leaky ReLU while downscaling. The predictions are composed as patches 
-which are calculated similar to logits and are optimized as 
+The discriminator classifies the target maps with its input map samples from both the
+ real and generated sample distributions much like that of the WGAN-GP with the only 
+differences being that it is provided with all mentioned feature maps and that is uses a 
+Binary Cross Entropy loss function. Both the generator and discriminator use modules of the 
+form of a convolution, followed by batch normalization and a RelU activation when upscaling 
+or a Leaky ReLU while downscaling. The predictions are composed as patches which are 
+calculated similar to logits and are optimized as 
 \begin{itemize}
 \item $Y_{Gen} = D(X_{I\char`_True}+X_{T\char`_Gen}) = Logits(X_{I\char`_True}+X_{T\char`_Gen})$ are brought closer to 0 as it indicates that the
 sample is generated.
@@ -1175,7 +1178,7 @@ the true proportions of the categories in that of the true target maps of the le
 through finding the absolute sum error $\epsilon_{as}$ of the generated feature maps from 
 that of the target feature maps for each category $k$.
 \begin{equation} \label{eq:ase}
-\epsilon_{as^k} = |\sum_{i=1}^n \sum_{j=1}^n X_{T\char`_True_{ij}^k} - X_{T\char`_Gen_{ij}}|
+\epsilon_{as^k} = |\sum_{i=1}^n \sum_{j=1}^n X_{T\char`_True_{ij}^k} - X_{T\char`_Gen_{ij}^k}|
 \end{equation}
 \begin{equation} \label{eq:objectloss}
 L_{O} = \dfrac{1}{|K|}\sum_{k=1}^K\lambda \cdot ln|1+ \dfrac{\epsilon_{as^k}}{1+ \sum_{i=1}^n \sum_{j=1}^nX_{T\char`_True_{ij}^k}}|
@@ -1183,7 +1186,7 @@ L_{O} = \dfrac{1}{|K|}\sum_{k=1}^K\lambda \cdot ln|1+ \dfrac{\epsilon_{as^k}}{1+
 This error is taken in proportion to the number of target objects to ensure that the categories 
 with fewer objects do not get ignored. Just as the mask loss, a natural log is used to modulate  
 large loss values towards a more moderate scaling with $\lambda$ amplify its significance. 
-Finally, the mean of this loss is taken across the available categories $K$ is summed with 
+Finally, the mean of this loss is taken across the available categories $K$ is then summed with 
 the GAN loss from Equation~\ref{eq:patchloss} and the mask loss to derive the total generator’s loss.
 \begin{equation} \label{eq:genloss}
 L_{G}=-\mathop{{}\mathbb{E}}_{x,z}[log(D(X_{I\char`_True},X_{T\char`_Gen})] + L_{M} + L_{O}
@@ -1196,10 +1199,10 @@ $X_{Val}$. At the end of each epoch, reference samples are computed using the sa
 seed of gaussian noise with a mean of 0 and standard deviation of 1. These are used to 
 provide a visual understanding as to the development of the model over the training cycle. 
 As the architecture is composed of two separate models, the training algorithm has been 
-distinctly tabulated with one detailing the processes performed by the WGAN-GP network and 
-another for the cGAN network.
+distinctly tabulated with one detailing the processes performed by the WGAN-GP networks and 
+another for the cGAN networks.
 
-This dataset is artificially enlarged for the WGAN-GP networks to 8064 and 2048 
+This dataset has been artificially enlarged for the WGAN-GP networks to 8064 and 2048 
 for training and validation respectively through the consideration of the three 
 90-degree rotations and its mirror images to exploit for the differences in level 
 orientation. Each of the WGAN-GP networks has been trained for 
@@ -1232,12 +1235,11 @@ Network Checkpoint & $G$, $G_{Optim}$ & checkpoint & 1512 & -\\
 \newpage
 
 The hybrid network on the other hand does not have its dataset enlarged since they 
-are trained with a batch size of 1 and consecutive samples with altered orientations 
+are trained with a batch size of 1 as consecutive samples with altered orientations 
 causes it to retain unnecessary bias when presented with unusual samples from the 
-dataset. It is also trained over 100 epochs with validation performed every 100 
-batches, using the same hyperparameters with the exception being that the Adam 
-optimizer has a learning rate of 6e-5 to reduce the impact of each batch and avoid
-reaching a local minimum.
+dataset. It is also trained similarly to the WGAN-GP, using the same hyperparameters 
+with the exception being that the Adam optimizer has a learning rate of 6e-5 to reduce 
+the impact of each batch and avoid reaching a local minimum and a weight of 10 for the object loss.
 \begin{table}[H]
 \centering 
 \begin{tabular}{ |C{2.5cm}|C{2.5cm}|C{2.5cm}|C{2.5cm}|C{2.5cm}|}
@@ -1263,7 +1265,7 @@ Network Checkpoint & $G$, $G_{Optim}$ & checkpoint & 1023 & -\\
 \end{table}
 
 \subsection{Updated WAD Generator}
-Feature maps are used to reverse engineered into the mandatory lumps necessary for
+Feature maps are reverse engineered into the mandatory lumps necessary for
 the DOOM engine with the help of certain refinements made to Giacomello’s WAD 
 Editor. Firstly, detached regions of the level have been addressed through the 
 introduction of post processing before generation of category maps. It removes holes 
@@ -1272,7 +1274,7 @@ generating the corresponding category maps. Another issue is the presence of ina
 paths that are caused by narrow corridors between the sections. This happens when the scale 
 size of pixel wide sectors is smaller than the player. It has been tackled by ensuring that 
 the minimum width of paths represented by pixel is greater than the dimensions of the character 
-by enforcing a scaling factor of 128 while never exceeding the bounds of the level space.
+by enforcing a scaling factor of 128 while never exceeding the bounds of the available level space.
 
 The Doom Engine also uses a Binary Space Partitioning Algorithm for pre-computing 
 the Hidden Surface Determination or occlusion culling. In this work, the 
@@ -1298,7 +1300,7 @@ calculated during the training phase. Although it may seem tempting to simplify 
 functional generator by means of using just a U-Net architecture which only implements the 
 object and mask loss as discussed in the previous section, it is incapable of mimicking 
 the subtle variations of object placements through performing the image-to-image 
-translation purely with a fixed loss function and hence is rejected for this system.
+translation purely with a fixed loss function and hence has been rejected for this system.
 
 The traditional WGAN-GP network is not taken into account for the training metrics as it does not 
 use a two-step process making it difficult to calculate them without context. It also 
@@ -1334,11 +1336,11 @@ WGAN-GP & Wasserstien Distance with Gradient Penality & floormap, heightmap, wal
 \label{ch:results}%
 
 \section{Evaluation Metrics}
-The focus of this portion of the thesis is to quantify the evaluation of the results that 
-have been obtained from the experiments through the proposed metrics. The
-preliminary analysis is done to provide plausible justification for the use of the 
+The focus of this portion of the thesis is to quantify the evaluations that have 
+been made through the results obtained from the experiments using the proposed 
+metrics. The preliminary analysis is done to provide plausible justification for the use of the 
 modified cGAN network through the training metrics that have been acquired 
-alongside its validation to showcase their differences. The metrics consist of the 
+alongside its validation by showcasing their differences. The metrics consist of the 
 discriminator’s ability to classify the levels, the unique information needed to 
 describe the level as well as the following statistics:
 \begin{itemize}
@@ -1370,9 +1372,9 @@ which is not yet established, making it impractical to compare their respective 
 Instead a set of post training metrics are used to provide a more appropriate analysis. 
 These include the performance of the generator in understanding the problem by 
 identifying visual artifacts in the presentation of the things map and distinguishing 
-the samples intuitively as well as the analyzing the object distribution, both spatially 
-and categorically, which while not comprehensive, should provide conclusive 
-evidence of its ability. These techniques assess the presence of a game object around 
+the samples intuitively. as well as the analyzing the object distribution, both spatially 
+and categorically. While not it is not completely comprehensive,  it should provide conclusive 
+evidence of their abilities. These later techniques assess the presence of a game object around 
 the surrounding context, be it the local section or the encompassing level and are 
 described as follows:
 \begin{itemize}
@@ -1382,7 +1384,7 @@ understand how well the model is able to grasp the relation between the
 requirement of placing objects from different categories and significance of 
 their individual types. This in junction with the count of the individual object 
 type from the available categories provide a clear picture on the biases and 
-tendencies of the generator when applying any positive pixel’s encoding.
+tendencies of the generator when applying a positive encoding on any pixel.
 \item RipleyK Function – It is used to measure the spatial distribution of the generated 
 objects \cite{BdR17}. It determines whether points have a random, dispersed, or 
 clustered distribution pattern. The function is calculated by taking the average
@@ -1403,10 +1405,10 @@ of the function.
 \section{Model Evaluation}
 \subsection{Training Metrics}
 By using the loss computed during the training sequence, we are able to compare the 
-variation in the discriminators ability to identify the generated levels. As both the 
-networks use different loss functions in their generators, it is difficult to directly
+variation in the discriminator's ability to identify the generated levels. As both cGANs 
+use different loss functions in their generators, it is difficult to directly
 compare their assessments and thus more emphasis will be given between graphs of 
-the discriminators in the cGAN networks from the hybrid architecture. Although 
+the discriminators from both models of the hybrid architecture. Although 
 validation data is not as useful in GANs to assess overfitting and/or implement early 
 stopping, it is still done to hold back some real samples for testing the discriminating 
 network to compare how well it can classify images among the functional generators 
@@ -1430,7 +1432,7 @@ discriminator with a smaller loss value but is plagued with inconsistencies due 
 stricter constraints of the $L1$ norm present in the generator loss when handling 
 outliers in the training dataset, leading to a more noisier graph when compared to 
 the laxer restrictions imposed by the object and mask loss. This is also seen in the fact 
-that the traditional cGAN performs very differently from independent instancse of the 
+that the traditional cGAN performs very differently from independent instances of the 
 complete training cycle and seems to be extremely sensitive towards the shuffling 
 process while the modified cGAN is able to repeatedly settle at a minima that provides 
 consistent results.
@@ -1461,10 +1463,10 @@ error highlighting the positioning the objects outside the prescribed level spac
 \end{figure}
 Even though the traditional cGAN provides a object count in line with its modified 
 counterpart, most of the objects that have been generated are not within the limit of 
-the dictionary ids which has an negative effect to the otherwise normal object count
-after the correction is made as seen in Figure~\ref{fig:tradcgansample1} and 
-Figure~\ref{fig:tradcgansample2}. This is caused by outliers that occur within the feature 
-maps of the repository because some custom levels having an unusual distribution such 
+the dictionary ids as seen in Figure~\ref{fig:tradcgansample1} and Figure~\ref{fig:tradcgansample2} 
+which has an negative effect to the otherwise normal object count
+after the correction is made. This is caused by outliers that occur within the repository of 
+feature maps because some custom levels having an unusual distribution such 
 as higher count of more significant object types in some categories while the others 
 only having a few less significant object types.
 \begin{figure}[H]
@@ -1508,7 +1510,7 @@ category within the levels.
 
 \subsection{Spatial Homogeneity}
 The Ripley-K results are interpreted with larger values being the outcome of distributions that 
-have greater deviation to completely spatial random distributions or are spread 
+have greater deviation to completely spatial random distributions or are not spread 
 homogenously across the given space. Table~\ref{table:ripleykavg} records the average spread of the 
 objects with the results closest to the real distribution being that of the Modified cGAN architecture. 
 It is measured at various radii with the histograms of all of the networks at each radius provided in Appendix~\ref{appendixb}. 
@@ -1539,9 +1541,9 @@ smaller portions than compared to the actual size of the normalized maps \cite{J
 \end{table}
 The traditional WGAN-GP network has a greater average Ripley-K result at each of the 
 radii due to overly clumping its game objects near the walls its level structure as well 
-as enlarging the sample space due to the presence of small objects. This drastically 
-reduced through post processing the the feature maps as well as using of either cGAN 
-network as it provides a more homogeneous distribution which is in line with that shown 
+as enlarging the sample space due to the presence of small objects. This is drastically 
+reduced through post processing the topological feature maps as well as using either cGAN 
+networks as it provides a more homogeneous distribution which is in line with that shown 
 by the results from the real feature maps and is why they both lead to a similar result. 
 \newpage
 
@@ -1561,17 +1563,19 @@ a disparity in the distribution of game objects among the categories by mostly
 generating objects for the first category of the sequenced dictionary id with emphasis 
 towards lower values shown in Figure~\ref{fig:wgansample1} and Figure~\ref{fig:wgansample2}. 
 This is better in comparison to training it with the expanded feature maps as it usually generated zero 
-matrices for those additional features.
+matrices for the categorical features.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{wgan_sample1.jpg}
+    \includegraphics[width=1\textwidth]{wgan_sample2.jpg}
     \caption[Samples generated using the traditional WGAN-GP architecture (1 of 2)]{Floor, Monsters, Ammunitions, Powerups, Artifacts and Weapons Map 
 (Column pairs) generated using the traditional WGAN-GP network (1 of 2)}
     \label{fig:wgansample1}
 \end{figure}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\textwidth]{wgan_sample2.jpg}
+    \includegraphics[width=1\textwidth]{wgan_sample3.jpg}
+    \includegraphics[width=1\textwidth]{wgan_sample4.jpg}
     \caption[Samples generated using the traditional WGAN-GP architecture (2 of 2)]{Floor, Monsters, Ammunitions, Powerups, Artifacts and Weapons Map 
 (Column pairs) generated using the traditional WGAN-GP network (2 of 2)}
     \label{fig:wgansample2}
@@ -1581,13 +1585,15 @@ matrices for those additional features.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{trad_cgan_sample1.jpg}
+    \includegraphics[width=1\textwidth]{trad_cgan_sample2.jpg}
     \caption[Samples generated using the traditional cGAN network (1 of 2)]{Floor, Monsters, Ammunitions, Powerups, Artifacts and Weapons Map 
 (Column pairs) generated using the hybrid architecture with traditional cGAN network (1 of 2)}
     \label{fig:tradcgansample1}
 \end{figure}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\textwidth]{trad_cgan_sample2.jpg}
+    \includegraphics[width=1\textwidth]{trad_cgan_sample3.jpg}
+    \includegraphics[width=1\textwidth]{trad_cgan_sample4.jpg}
     \caption[Samples generated using the traditional cGAN network (2 of 2)]{Floor, Monsters, Ammunitions, Powerups, Artifacts and Weapons Map 
 (Column pairs) generated using the hybrid architecture with traditional cGAN network (2 of 2)}
     \label{fig:tradcgansample2}
@@ -1607,20 +1613,22 @@ network maps the object positions from the generated level structure. This also
 allows the WGAN-GP to focus more resources towards learning the topological 
 distribution which helps in the development of better level layouts to a certain 
 extent. This does not ensure that its structure is always better given a random seed as 
-the samples that have been use have been handpicked and showcases the best of 
-both networks. As both hybrid models use the same WGAN-GP generator, the 
+the samples that have been use are handpicked to showcase the best results of 
+all the trained architectures. As both hybrid models use the same WGAN-GP generator, the 
 topological maps are the same with the only difference lying in its generated object 
 maps.
 \begin{figure}[H]
     \centering
     \includegraphics[width=1\textwidth]{mod_cgan_sample1.jpg}
+    \includegraphics[width=1\textwidth]{mod_cgan_sample2.jpg}
     \caption[Samples generated using the modified cGAN network (1 of 2)]{Floor, Monsters, Ammunitions, Powerups, Artifacts and Weapons Map 
 (Column pairs) generated using the hybrid architecture with modified cGAN network (1 of 2)}
     \label{fig:modcgansample1}
 \end{figure}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=1\textwidth]{mod_cgan_sample2.jpg}
+    \includegraphics[width=1\textwidth]{mod_cgan_sample3.jpg}
+    \includegraphics[width=1\textwidth]{mod_cgan_sample4.jpg}
     \caption[Samples generated using the modified cGAN network (2 of 2)]{Floor, Monsters, Ammunitions, Powerups, Artifacts and Weapons Map 
 (Column pairs) generated using the hybrid architecture with modified cGAN network (2 of 2)}
     \label{fig:modcgansample2}
@@ -1648,7 +1656,7 @@ games. This can be replicated in most games with a 2D map system to improve thei
 replayability through the generation of multiple level layouts as well as multiple 
 game object maps for each layout occasionally.
 
-The models in this experiment are restrained in using the same dataset for the sake of 
+The models in this experiment are restrained to using the same dataset for the sake of 
 maintaining consistency across all of the trained architectures. The system is open to 
 improvement by modifying the dataset so that each model within the hybrid 
 architecture can be fully utilized to its utmost potential. This can be done simply by 
@@ -1686,11 +1694,11 @@ before they can be used to incorporate concepts of puzzles within gameplay.
 \section{Future Works}
 This system can be expanded by implementing additional models to separately learn 
 the texture distribution of the level with the texture maps implemented through 
-encoding pixels with texture id from a graphic dictionary and used to generate by 
+encoding pixels with texture id from a graphic dictionary and generated by 
 means of a conditional network as used here. Conversely, by modifying the 
 architecture to represent the textures map at lower resolutions, actual pixel colors can 
 be encoded in the images to generate new graphics that are then extracted from the 
-maps and encoded to their respective formats. Although this requires image 
+maps and encoded into their respective formats. Although this would  require image 
 translation with super resolution models \cite{XuW22} that can generate the aesthetical features
 together as the process would be dramatically upscaled for representing the
 complete texture map at an acceptable resolution. 
@@ -1808,7 +1816,7 @@ Game Objects Count by Type
 % ACKNOWLEDGEMENTS
 \chapter*{Acknowledgements}
 I would like to thank my supervisor, Daniele Loiacono for the instructions he provided me that allowed me to write this thesis.
-I thank my family and friends, especially my parents who supported me both financially and emotionally through this prolonged endeavor as well as provided me with their consistent encouragement, keeping me motivated and stay on track towards completing this thesis. I express my gratitude towards Ali Emre Soleleyuk that sat through my venting during the arising complications which let me have my breakthroughs in the most random of circumstances and Amrit A. with whom I was able to relax and redirect my focus towards actions that have been more productive.
+I thank my family and friends, especially my parents who supported me both financially and emotionally through this prolonged endeavor as well as provided me with their consistent encouragement which kept me motivated and stay on track towards completing this thesis. I express my gratitude towards Ali Emre Soleleyuk that sat through my venting during arising complications which let me have the breakthroughs that helped me progress towards its completion and Amrit A. with whom I was able to relax and redirect my focus towards actions that have been more productive.
 
 \cleardoublepage
 
