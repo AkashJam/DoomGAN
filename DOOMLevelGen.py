@@ -8,12 +8,22 @@ from gan.NNMeta import view_maps
 from WADParser.WADEditor import WADWriter
 import numpy as np
 from skimage import morphology
-from matplotlib import pyplot as plt
 
 
 def wgan_fmaps(model, seed, meta):
     maps = model(seed, training=False)
     keys = topological_maps + ['essentials']
+    # batch_size = seed.shape[0]
+    # floor_id = topological_maps.index('floormap')
+    # process_maps = maps.numpy()
+    # for i in range(batch_size):
+    #         map_size = np.sum((process_maps[i,:,:,floor_id]>0.1).astype(int))
+    #         sm_hole_size = int(process_maps.shape[1]/24)
+    #         map = morphology.remove_small_holes(process_maps[i,:,:,floor_id]>0.1,sm_hole_size)
+    #         map = morphology.remove_small_objects(map,map_size/3).astype(int)
+    #         for j in range(len(topological_maps)):
+    #             process_maps[i,:,:,j] = process_maps[i,:,:,j]*map
+    # maps = tf.convert_to_tensor(process_maps, dtype=tf.float32)
     scaled_maps = rescale_maps(maps,meta,keys)
     gen_maps = tf.cast(scaled_maps,tf.uint8)
     return gen_maps, keys
@@ -25,27 +35,17 @@ def hybrid_fmaps(wgan_model, can_model, seed, noisy_img, meta, use_sample=False,
         level_layout = wgan_model(seed, training=False)
         floor_id = topological_maps.index('floormap')
         gen_layout = level_layout.numpy()
-
         for i in range(batch_size):
             map_size = np.sum((gen_layout[i,:,:,floor_id]>0.1).astype(int))
             sm_hole_size = int(gen_layout.shape[1]/24)
             map = morphology.remove_small_holes(gen_layout[i,:,:,floor_id]>0.1,sm_hole_size)
             map = morphology.remove_small_objects(map,map_size/3).astype(int)
-
-        # plt.subplot(1,2,1)
-        # plt.imshow(level_layout[0,:,:,0])
-        # plt.subplot(1,2,2)
-        # plt.imshow(map)
-        # plt.show()
-
-        for j in range(len(topological_maps)):
-            gen_layout[i,:,:,j] = gen_layout[i,:,:,j]*map
-
+            for j in range(len(topological_maps)):
+                gen_layout[i,:,:,j] = gen_layout[i,:,:,j]*map
         level_layout = tf.convert_to_tensor(gen_layout, dtype=tf.float32)
         if tf.reduce_sum(level_layout[0,:,:,floor_id])==0:
             print('use another seed')
             sys.exit()
-
     level_objs = can_model([level_layout,noisy_img], training=True)
     samples = tf.concat([level_layout,level_objs],axis=-1)
     keys = topological_maps + object_maps
@@ -56,10 +56,10 @@ def hybrid_fmaps(wgan_model, can_model, seed, noisy_img, meta, use_sample=False,
             id = keys.index(key)
             min = meta[key]['min']
             max = meta[key]['max']
-            corrected_map = actual_maps[:,:,:,id] * tf.cast(tf.logical_and(actual_maps[:,:,:,id]>min,actual_maps[:,:,:,id]<=max),tf.uint8)
+            corrected_mask = tf.cast(tf.logical_and(tf.logical_and(actual_maps[:,:,:,id]>min, actual_maps[:,:,:,id]<=max),
+                                                    actual_maps[:,:,:,keys.index('floormap')]>0),tf.uint8)
+            corrected_map = actual_maps[:,:,:,id] * corrected_mask
             essentials = corrected_map if id==len(topological_maps) else tf.maximum(essentials,corrected_map)
-
-
     gen_maps = tf.stack([actual_maps[:,:,:,0], actual_maps[:,:,:,1], actual_maps[:,:,:,2], essentials],axis=-1)
     title = topological_maps + ['essentials']
     return gen_maps, title
@@ -73,13 +73,11 @@ def sample_generation(params):
     checkpoint_dir = 'gan/training_checkpoints/hybrid/wgan' if params['use_hybrid'] else 'gan/training_checkpoints/wgan'
     checkpoint = tf.train.Checkpoint(generator=wgen)
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-    
     if params['use_hybrid']:
         cgen = cganGen(params['n_tmaps'],params['n_omaps'])
         checkpoint_dir = 'gan/training_checkpoints/hybrid/mod_cgan' if params['mod_cgan'] else 'gan/training_checkpoints/hybrid/trad_cgan'
         checkpoint = tf.train.Checkpoint(generator=cgen)
         checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-
         if params['use_sample']:
             loc = 'dataset/generated/doom/wgan/test.tfrecords'
             if not os.path.isfile(loc):
@@ -95,17 +93,14 @@ def sample_generation(params):
             feature_maps, feature_keys = hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'])
         loc = 'dataset/generated/doom/hybrid/'
         path = loc + 'mod_cgan/' if params['mod_cgan'] else loc + 'trad_cgan/'
-
     else:
         feature_maps,feature_keys = wgan_fmaps(wgen, z, meta['maps_meta'])
         path='dataset/generated/doom/wgan/'
-
-    view_maps(feature_maps, feature_keys, meta['maps_meta'], split_objs=True, only_objs=False)
+    view_maps(feature_maps, feature_keys, meta['maps_meta'], split_objs=True, only_objs=True)
     if not os.path.exists(path):
         os.makedirs(path)
     if params['save_sample']: 
         generate_sample(feature_maps, feature_keys, save_path=path, file_name = 'test.tfrecords')
-        
     if params['gen_level']:
         maps = dict()
         for i in range(len(feature_keys)):
@@ -127,7 +122,7 @@ def define_flags():
     flags['use_hybrid'] = True
     flags['mod_cgan'] = True
     flags['use_sample'] = False
-    flags['gen_level'] = True
+    flags['gen_level'] = False
     flags['save_sample'] = False
     return flags
 

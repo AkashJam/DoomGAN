@@ -59,7 +59,7 @@ def Generator(n_inp, n_opt):
 loss_object = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
 
-def generator_loss(disc_generated_output, gen_output, target, input_imgs, LAMBDA=10):
+def generator_loss(disc_generated_output, gen_output, target, input_imgs, LAMBDA=50):
   gan_loss = loss_object(tf.ones_like(disc_generated_output), disc_generated_output)
 
   if mod:
@@ -199,10 +199,10 @@ def train(epochs):
       gen_ts_loss.append(step_loss['g_loss'])
       print ('Time for batch {} is {} sec. d_loss: {} g_loss: {}'.format(n+1, time.time()-start,step_loss['d_loss'],step_loss['g_loss']))
       total_batches = len(disc_ts_loss)
-      if total_batches%100 == 0:
-        v_dloss, v_gloss= v_loss(total_batches)
-        gen_vs_loss.append(v_gloss)
-        disc_vs_loss.append(v_dloss)
+      # if (total_batches+1)%1000 == 0:
+    v_dloss, v_gloss= v_loss(total_batches)
+    gen_vs_loss.append(v_gloss)
+    disc_vs_loss.append(v_dloss)
 
     if (epoch+1)%10 == 0:
       checkpoint.save(file_prefix = checkpoint_prefix)
