@@ -1,13 +1,24 @@
 import tensorflow as tf
 import os, sys
 from gan.NetworkArchitecture import topological_maps, object_maps
-from gan.cgan import Generator as cganGen
-from gan.wgan import Generator as wganGen
-from gan.DataProcessing import generate_sample, read_json, rescale_maps, parse_tfrecord, normalize_maps
-from gan.NNMeta import view_maps
+from gan.cgan import cGAN
+from gan.wgan import WGAN_GP
+from gan.DataProcessing import generate_sample, view_maps, rescale_maps, normalize_maps
+from gan.NNMeta import read_json, read_record, parse_tfrecord
 from WADParser.WADEditor import WADWriter
 import numpy as np
 from skimage import morphology
+from gan.ModelEvaluation import plot_RipleyK, plot_train_metrics, calc_proportions, calc_stats
+from WADScraper.scraper import Scraper
+from WADParser.parser import Parser
+
+
+def train_model(params):
+    wgan = WGAN_GP(params['use_hybrid'])
+    wgan.train(params['epochs'])
+    if params['use_hybrid']:
+        cgan = cGAN(params['mod_cgan'])
+        cgan.train(params['epochs'])
 
 
 def wgan_fmaps(model, seed, meta):
@@ -68,16 +79,12 @@ def hybrid_fmaps(wgan_model, can_model, seed, noisy_img, meta, use_sample=False,
 def sample_generation(params):
     z = tf.random.normal([params['batch_size'], params['z_dim']],seed=params['seed'])
     noisy_img = tf.random.normal([params['batch_size'], 256, 256, 1],seed=params['seed'])
-    meta = read_json('dataset/parsed/doom/')
-    wgen = wganGen(params['n_tmaps'], params['z_dim']) if params['use_hybrid'] else wganGen(params['n_tmaps']+1, params['z_dim'])
-    checkpoint_dir = 'gan/training_checkpoints/hybrid/wgan' if params['use_hybrid'] else 'gan/training_checkpoints/wgan'
-    checkpoint = tf.train.Checkpoint(generator=wgen)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
+    meta = read_json()
+    Tgen = WGAN_GP(params['use_hybrid'])
+    Tgen.load_checkpoint()
     if params['use_hybrid']:
-        cgen = cganGen(params['n_tmaps'],params['n_omaps'])
-        checkpoint_dir = 'gan/training_checkpoints/hybrid/mod_cgan' if params['mod_cgan'] else 'gan/training_checkpoints/hybrid/trad_cgan'
-        checkpoint = tf.train.Checkpoint(generator=cgen)
-        checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
+        Fgen = cGAN(params['mod_cgan'])
+        Fgen.load_checkpoint()
         if params['use_sample']:
             loc = 'dataset/generated/doom/wgan/test.tfrecords'
             if not os.path.isfile(loc):
@@ -88,13 +95,13 @@ def sample_generation(params):
             level_maps = tf.stack([sample_input[m] for m in topological_maps], axis=-1).reshape(1, 256, 256, len(topological_maps))
             level_maps = tf.cast(level_maps,tf.float32)
             level_maps = normalize_maps(level_maps,meta['maps_meta'],topological_maps)
-            feature_maps, feature_keys = hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'], use_sample=True, level_layout=level_maps) 
+            feature_maps, feature_keys = hybrid_fmaps(Tgen.generator, Fgen.generator, z, noisy_img, meta['maps_meta'], use_sample=True, level_layout=level_maps) 
         else: 
-            feature_maps, feature_keys = hybrid_fmaps(wgen, cgen, z, noisy_img, meta['maps_meta'])
+            feature_maps, feature_keys = hybrid_fmaps(Tgen.generator, Fgen.generator, z, noisy_img, meta['maps_meta'])
         loc = 'dataset/generated/doom/hybrid/'
         path = loc + 'mod_cgan/' if params['mod_cgan'] else loc + 'trad_cgan/'
     else:
-        feature_maps,feature_keys = wgan_fmaps(wgen, z, meta['maps_meta'])
+        feature_maps,feature_keys = wgan_fmaps(Tgen.generator, z, meta['maps_meta'])
         path='dataset/generated/doom/wgan/'
     view_maps(feature_maps, feature_keys, meta['maps_meta'], split_objs=True, only_objs=True)
     if not os.path.exists(path):
@@ -112,22 +119,73 @@ def sample_generation(params):
         print('created sample level record')
 
 
+def model_eval(params):
+    model = WGAN_GP(use_hybrid=False)
+    model.load_checkpoint()
+    TWgen = model.generator
+    model = WGAN_GP(use_hybrid=True)
+    model.load_checkpoint()
+    HWgen = model.generator
+    model = cGAN(use_mod=False)
+    model.load_checkpoint()
+    TFgen = model.generator
+    model = cGAN(use_mod=True)
+    model.load_checkpoint()
+    MFgen = model.generator
+    del model
+    training_set, validation_set, map_meta, sample= read_record(batch_size=params['test_size'])
+    for i, data in training_set.enumerate().as_numpy_iterator():
+        z = tf.random.normal([params['test_size'], params['z_dim']])
+        noise = tf.random.normal([params['test_size'], 256, 256, 1])
+        wgan_maps, keys = wgan_fmaps(TWgen, z, map_meta)
+        hybrid_trad_maps, keys = hybrid_fmaps(HWgen, TFgen, z, noise, map_meta)
+        hybrid_mod_maps, keys = hybrid_fmaps(HWgen, MFgen, z, noise, map_meta)
+        real_maps = np.stack([data[m] for m in keys], axis=-1)
+        r_maps = np.concatenate((r_maps,real_maps), axis=0) if i != 0 else real_maps
+        w_maps = np.concatenate((w_maps,wgan_maps.numpy()), axis=0) if i != 0 else wgan_maps.numpy()
+        ht_maps = np.concatenate((ht_maps,hybrid_trad_maps.numpy()), axis=0) if i != 0 else hybrid_trad_maps.numpy()
+        hm_maps = np.concatenate((hm_maps,hybrid_mod_maps.numpy()), axis=0) if i != 0 else hybrid_mod_maps.numpy()
+        if i==1: break
+    calc_proportions(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta,params['test_size'])
+    calc_stats(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
+    plot_RipleyK(r_maps,w_maps,ht_maps,hm_maps,keys,params['test_size'])
+    plot_train_metrics()
+
+
 def define_flags():
     flags = dict()
     flags['batch_size'] = 1
-    flags['seed'] = 7
+    flags['seed'] = 19
     flags['z_dim'] = 100
     flags['n_tmaps'] = len(topological_maps)
     flags['n_omaps'] = len(object_maps)
     flags['use_hybrid'] = True
     flags['mod_cgan'] = True
+    flags['epochs'] = 100
     flags['use_sample'] = False
-    flags['gen_level'] = False
-    flags['save_sample'] = False
+    flags['gen_level'] = True
+    flags['save_sample'] = False  
+    flags['test_size'] = 100
     return flags
 
 
 if __name__ == "__main__":
     params = define_flags()
-    sample_generation(params)
+    if len(sys.argv)==2:
+        if sys.argv[1] =='-scrap':
+            wad_scraper = Scraper()
+            wad_scraper.scrap_levels()
+        elif sys.argv[1]=='-parse':
+            wad_parser = Parser()
+            wad_parser.parse_wads()
+        elif sys.argv[1] =='-train':
+            train_model(params)
+        elif sys.argv[1]=='-evaluate':
+            model_eval(params)
+        elif sys.argv[1]=='-generate':
+            sample_generation(params)
+        else:
+            print('Please provide one of the these flags -scrap -parse, -train, -evaluate, -generate')
+    else:
+        print('Please provide one of the these flags -scrap -parse, -train, -evaluate, -generate')
     

@@ -1,18 +1,32 @@
-import sys
-sys.path.insert(0,'..')
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
-from gan.cgan import Generator as cganGen
-from gan.wgan import Generator as wganGen
-from DOOMLevelGen import hybrid_fmaps, wgan_fmaps
-from gan.DataProcessing import read_record
 import os, json
-from gan.NetworkArchitecture import topological_maps, object_maps
-from gan.eval_metrics.metrics import level_props, calc_RipleyK
+from gan.NetworkArchitecture import object_maps
+from gan.metrics import level_props, calc_RipleyK
 
 
-def plot_train_metrics(save_path = 'eval_metrics/'):
+def generate_loss_graph(train_loss, valid_loss, key, sfactor = 10, location = 'generated_maps/'):
+    plt.xlabel('Number of Steps')
+    plt.ylabel('Loss')
+    smoothened_loss = list()
+    for i in range(0, len(train_loss), sfactor):
+        loss =  train_loss[i:i + sfactor]
+        smoothened_loss.append(sum(loss)/len(loss))
+    train_batch = [tb*sfactor for tb in list(range(len(smoothened_loss)+1))]
+    valid_batch = [vb*len(train_loss)/len(valid_loss) for vb in list(range(len(valid_loss)+1))]
+    train_loss = [0] + smoothened_loss
+    valid_loss = [0] + valid_loss
+    plt.plot(train_batch, train_loss, label="train")
+    plt.plot(valid_batch, valid_loss, label="validation")
+    plt.legend() # must be after labels
+    if not os.path.exists(location):
+        os.makedirs(location)
+    plt.savefig(location + key + '_loss_graph')
+    plt.close()
+
+
+def plot_train_metrics(save_path = 'artifacts/eval_metrics/'):
     file_path = save_path + 'training_metrics.json'
     if not os.path.isfile(file_path):
         print('No metric record found')
@@ -57,11 +71,11 @@ def plot_prop_graph(props):
     ax.legend()
     ax.set_ylim(0, 100)
     # plt.show()
-    plt.savefig('./eval_metrics/cate_props')
+    plt.savefig('artifacts/eval_metrics/cate_props')
     plt.close()
 
 
-def calc_proportions(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
+def calc_proportions(real, wgan, hybrid_trad, hybrid_mod, keys, meta, test_size):
     real_props = level_props(real, keys, meta, test_size)
     wgan_props = level_props(wgan, keys, meta, test_size)
     hybrid_trad_props = level_props(hybrid_trad, keys, meta, test_size)
@@ -100,11 +114,11 @@ def calc_stats(real, wgan, hybrid_trad, hybrid_mod, keys, meta):
         ax.xaxis.get_major_locator().set_params(integer=True)
         plt.legend() # must be after labels
         # plt.show()
-        plt.savefig('./eval_metrics/'+cate+'_count')
+        plt.savefig('artifacts/eval_metrics/'+cate+'_count')
         plt.close()
 
 
-def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):  
+def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod, keys, test_size):  
     test_radii = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]               
     rlevel_areas, rlevel_ripk = calc_RipleyK(real, keys, test_size, test_radii)
     wlevel_areas, wlevel_ripk = calc_RipleyK(wgan, keys, test_size, test_radii)
@@ -142,52 +156,5 @@ def plot_RipleyK(real, wgan, hybrid_trad, hybrid_mod):
         fig.text(0.08, 0.5, "Count", ha="center", va="center", rotation=90)
         # fig.tight_layout(pad=0.4)
         # plt.show()
-        plt.savefig('./eval_metrics/ripk_'+str(int(r*10)))
+        plt.savefig('artifacts/eval_metrics/ripk_'+str(int(r*10)))
         plt.close()
-
-
-if __name__ == "__main__":
-    b_size = 100
-    z_dim = 100
-    test_size = 100
-
-    trad_wgen = wganGen(4, z_dim)
-    checkpoint_dir = './training_checkpoints/wgan'
-    checkpoint = tf.train.Checkpoint(generator=trad_wgen)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-
-    hybrid_wgen = wganGen(3, z_dim)
-    checkpoint_dir = './training_checkpoints/hybrid/wgan'
-    checkpoint = tf.train.Checkpoint(generator=hybrid_wgen)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-
-    hybrid_mod_cgen = cganGen(len(topological_maps),len(object_maps))
-    checkpoint_dir = './training_checkpoints/hybrid/mod_cgan'
-    checkpoint = tf.train.Checkpoint(generator=hybrid_mod_cgen)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-
-    hybrid_trad_cgen = cganGen(len(topological_maps),len(object_maps))
-    checkpoint_dir = './training_checkpoints/hybrid/trad_cgan'
-    checkpoint = tf.train.Checkpoint(generator=hybrid_trad_cgen)
-    checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir)).expect_partial()
-
-    training_set, validation_set, map_meta, sample= read_record(batch_size=b_size)
-    for i, data in training_set.enumerate().as_numpy_iterator():
-        z = tf.random.normal([b_size, z_dim])
-        noise = tf.random.normal([b_size, 256, 256, 1])
-        wgan_maps, keys = wgan_fmaps(trad_wgen, z, map_meta)
-        hybrid_trad_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_trad_cgen, z, noise, map_meta)
-        hybrid_mod_maps, keys = hybrid_fmaps(hybrid_wgen, hybrid_mod_cgen, z, noise, map_meta)
-        real_maps = np.stack([data[m] for m in keys], axis=-1)
-        r_maps = np.concatenate((r_maps,real_maps), axis=0) if i != 0 else real_maps
-        w_maps = np.concatenate((w_maps,wgan_maps.numpy()), axis=0) if i != 0 else wgan_maps.numpy()
-        ht_maps = np.concatenate((ht_maps,hybrid_trad_maps.numpy()), axis=0) if i != 0 else hybrid_trad_maps.numpy()
-        hm_maps = np.concatenate((hm_maps,hybrid_mod_maps.numpy()), axis=0) if i != 0 else hybrid_mod_maps.numpy()
-        if i==1: break
-    calc_proportions(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
-    calc_stats(r_maps,w_maps,ht_maps,hm_maps,keys,map_meta)
-    plot_RipleyK(r_maps,w_maps,ht_maps,hm_maps)
-    plot_train_metrics()
-    
-    
-

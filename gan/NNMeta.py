@@ -1,138 +1,109 @@
 import tensorflow as tf
-import os, json, random
-from matplotlib import pyplot as plt
-from gan.NetworkArchitecture import topological_maps, object_maps
-from gan.DataProcessing import rescale_maps
-from tensorflow.python.ops.numpy_ops import np_config
-np_config.enable_numpy_behavior()
+import os, json, random, sys
 
 
-def training_metrics(count, mod, enc, ntp, oob, obj, save_path="eval_metrics/"):
-    mets = [sum(ntp)/len(ntp), sum(enc)/len(enc), sum(oob)/len(oob), sum(obj)/len(obj)]
-    file_path = save_path + 'training_metrics.json'
-    metrics = dict()
+def read_json(save_path = 'dataset/parsed/doom/'):
+    file_path = save_path + 'metadata.json'
     if os.path.isfile(file_path):
         with open(file_path, 'r') as jsonfile:
-            metrics = json.load(jsonfile)
-    cGAN_type = 'Modified cGAN' if mod else 'Traditional cGAN'
-    if cGAN_type not in list(metrics.keys()): metrics[cGAN_type] = dict()
-    keys = ['entropy', 'encoding_err', 'out_of_bounds_err', 'objs_per_area']
-    for i,key in enumerate(keys):
-        if key in list(metrics[cGAN_type].keys()) and count!=100:
-            metrics[cGAN_type][key].append(float(mets[i]))
-        else:
-            metrics[cGAN_type][key] = [float(mets[i])]
-    with open(file_path, 'w') as jsonfile:
-        json.dump(metrics, jsonfile)
-
-
-def generate_images(model, seed, epoch, keys, is_cgan = False, is_mod=False, test_input = None, meta = None):
-    prediction = model([test_input, seed], training=True) if is_cgan else model(seed, training=False)
-    if is_cgan:
-        scaled_pred = rescale_maps(prediction,meta,keys)
-        for i in range(len(keys)):
-            essentials = scaled_pred[0,:,:,i] if i == 0 else tf.maximum(essentials, scaled_pred[0,:,:,i])
-    display_list = ([test_input[0,:,:,i] for i in range(len(topological_maps))] + [essentials] if is_cgan 
-                    else [prediction[0,:,:,i] for i in range(len(keys))])
-
-    plt.figure(figsize=(8, 8))
-    for i in range(len(display_list)):
-        plt.subplot(2, 2, i+1)
-        if keys[i] == 'essentials':
-            plt.imshow((display_list[i]*2)+(display_list[i]>0).astype(tf.float32)*155, cmap='gray') 
-        else:
-            plt.imshow(display_list[i], cmap='gray') 
-        plt.axis('off')
-    loc = ('generated_maps/hybrid/mod_cgan/' if is_mod else 'generated_maps/hybrid/trad_cgan/' if is_cgan 
-           else 'generated_maps/wgan/' if 'essentials' in keys else 'generated_maps/hybrid/wgan/')
-    if not os.path.exists(loc):
-        os.makedirs(loc)
-    plt.savefig(loc + 'image_at_epoch_{:04d}.png'.format(epoch))
-    plt.close()
-
-
-def generate_loss_graph(train_loss, valid_loss, key, model, sfactor = 10, location = 'generated_maps/', met_path = "eval_metrics/"):
-    file_path = met_path + 'training_metrics.json'
-    metrics = dict()
-    if os.path.isfile(file_path):
-        with open(file_path, 'r') as jsonfile:
-            metrics = json.load(jsonfile)
-    GAN_type = model
-    if GAN_type not in list(metrics.keys()): metrics[GAN_type] = dict()
-    metrics[GAN_type]['train_loss'] = [float(tl) for tl in train_loss]
-    metrics[GAN_type]['valid_loss'] = [float(vl) for vl in valid_loss]
-    with open(file_path, 'w') as jsonfile:
-        json.dump(metrics, jsonfile)
-
-    plt.xlabel('Number of Steps')
-    plt.ylabel('Loss')
-    smoothened_loss = list()
-    for i in range(0, len(train_loss), sfactor):
-        loss =  train_loss[i:i + sfactor]
-        smoothened_loss.append(sum(loss)/len(loss))
-    train_batch = [tb*sfactor for tb in list(range(len(smoothened_loss)+1))]
-    valid_batch = [vb*len(train_loss)/len(valid_loss) for vb in list(range(len(valid_loss)+1))]
-    train_loss = [0] + [tl if tl<200 else random.uniform(190, 200) for tl in smoothened_loss] if key == 'critic' else [0] + smoothened_loss
-    valid_loss = [0] + [vl if vl<200 else random.uniform(190, 200) for vl in valid_loss] if key == 'critic' else [0] + valid_loss
-    plt.plot(train_batch, train_loss, label="train")
-    plt.plot(valid_batch, valid_loss, label="validation")
-    plt.legend() # must be after labels
-    if not os.path.exists(location):
-        os.makedirs(location)
-    plt.savefig(location + key + '_loss_graph')
-    plt.close()
-
-
-def view_maps(maps, keys, meta, split_objs=True, only_objs=True):
-    n_maps = maps.shape[0]
-    if split_objs:
-        if not only_objs:
-            for i in range(maps.shape[3]):
-                thingsid = keys.index('essentials')
-                if i!=thingsid:
-                    for j in range(n_maps):
-                        plt.subplot(2*n_maps, 4, i+j*8+1)
-                        plt.imshow(maps[j,:,:,i], cmap='gray')
-                        plt.axis('off')
-                else:
-                    for j,cate in enumerate(object_maps):
-                        min = meta[cate]['min']
-                        max = meta[cate]['max']
-                        for k in range(n_maps):
-                            cate_mask = tf.cast(tf.logical_and(maps[k,:,:,thingsid]>min,maps[k,:,:,thingsid]<=max),tf.uint8)
-                            cate_objs = maps[k,:,:,thingsid]*cate_mask
-                            plt.subplot(2*n_maps, 4, i+k*8+j+1)
-                            plt.imshow((cate_objs*55/max)+cate_mask*200, cmap='gray')
-                            plt.axis('off')
-            plt.tight_layout(pad=0.2)
-            plt.show()
-        else:
-            for i in range(n_maps):
-                for j in range(maps.shape[3]):
-                    floorid = keys.index('floormap')
-                    thingsid = keys.index('essentials')
-                    if j== floorid:
-                            plt.subplot(2*n_maps, 3, i*6+1)
-                            plt.imshow(maps[i,:,:,j]>0, cmap='gray')
-                            plt.axis('off')
-                    elif j== thingsid:
-                        for k,cate in enumerate(object_maps):
-                            min = meta[cate]['min']
-                            max = meta[cate]['max']
-                            cate_mask = tf.cast(tf.logical_and(maps[i,:,:,j]>min,maps[i,:,:,j]<=max),tf.uint8)
-                            cate_objs = maps[i,:,:,j]*cate_mask
-                            plt.subplot(2*n_maps, 3, i*6+k+2)
-                            plt.imshow((cate_objs*55/max)+cate_mask*200, cmap='gray')
-                            plt.axis('off')
-            plt.tight_layout(pad=0.2)
-            plt.show()
+            map_meta = json.load(jsonfile)
+        return map_meta
+    elif os.path.isfile('../'+file_path):
+        with open('../'+file_path, 'r') as jsonfile:
+            map_meta = json.load(jsonfile)
+        return map_meta
     else:
-        items = meta['essentials']['max']
-        for j in range(len(keys)):
-            plt.subplot(1, 4, j+1)
-            if keys[j] in ['essentials','thingsmap']:
-                plt.imshow((maps[0,:,:,j]*55/items)+tf.cast(maps[0,:,:,j]>0,tf.float32)*200, cmap='gray')
-            else:
-                plt.imshow(maps[0,:,:,j], cmap='gray')
-            plt.axis('off')
-        plt.show()
+        print('No metadata found')
+        sys.exit()
+
+
+def read_record(batch_size=32, save_path='dataset/parsed/doom/', sample_wgan=False): 
+    file_path = save_path + 'data.tfrecords'
+    metadata = read_json()
+    if not os.path.isfile(file_path):
+        print('No dataset record found')
+        sys.exit()
+    tfr_dataset = tf.data.TFRecordDataset(file_path)
+    sample = parse_tfrecord(tfr_dataset,metadata,sample_wgan)
+    # view_maps(sample)
+    dataset = tfr_dataset.map(_parse_tfr_element)
+    train_set, validation_set = partition_dataset(dataset,metadata['count'],batch_size)
+    # Returns a shuffled training set that is seperated into batches
+    return train_set, validation_set, metadata['maps_meta'], sample
+
+
+def parse_tfrecord(record, meta, sample_wgan, file_path='dataset/generated/doom/hybrid/sample.tfrecords'):
+    # If adding the wgan generated maps as the sample
+    if sample_wgan:
+        if not os.path.isfile(file_path):
+            print('No dataset record found')
+            sys.exit()
+        record = tf.data.TFRecordDataset(file_path)
+        map_keys = ['floormap','wallmap','heightmap']
+        sample_id = 0
+    else:
+        map_keys = list(meta['maps_meta'].keys())
+        sample_id = random.randrange(meta['count'])
+    parse_dic = {
+        key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
+        }
+    features = dict()
+    for i,element in enumerate(record):
+        if i != sample_id:
+            continue
+        else:
+            example_message = tf.io.parse_single_example(element, parse_dic)
+            for key in map_keys:
+                b_feature = example_message[key] # get byte string
+                feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
+                features[key] = feature
+            break
+    return features
+
+
+# Read the TF Records
+def _parse_tfr_element(element):
+    metadata = read_json()
+    map_keys = list(metadata['maps_meta'].keys())
+    parse_dic = {
+        key: tf.io.FixedLenFeature([], tf.string) for key in map_keys
+        }
+    example_message = tf.io.parse_single_example(element, parse_dic)
+    features = dict()
+    for key in map_keys:
+        b_feature = example_message[key] # get byte string
+        feature = tf.io.parse_tensor(b_feature, out_type=tf.uint8) # restore 2D array from byte string
+        features[key] = feature
+    return features
+
+
+def partition_dataset(ds, ds_size, batch_size, train_split=0.8, val_split=0.2, shuffle=True):
+    assert (train_split + val_split) == 1
+    if shuffle:
+        # Specify seed to always have the same split distribution between runs
+        ds = ds.shuffle(ds_size*100, seed=12)
+    train_size = int(train_split * ds_size)
+    train_ds = ds.take(train_size)    
+    val_ds = ds.skip(train_size)
+    return train_ds.batch(batch_size, drop_remainder=True), val_ds.batch(batch_size, drop_remainder=True)
+
+
+def downsample(filters, kernel, stride, norm, bias=True, kernel_initializer = 'glorot_uniform'):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Conv2D(filters, kernel, strides=stride, padding='same', use_bias=bias, kernel_initializer=kernel_initializer))
+    if norm == 'batch':
+        result.add(tf.keras.layers.BatchNormalization())
+    if norm == 'layer':
+        result.add(tf.keras.layers.LayerNormalization())
+    result.add(tf.keras.layers.LeakyReLU())
+    return result
+
+
+def upsample(filters, kernel, stride, dropout, bias=True, kernel_initializer = 'glorot_uniform'):
+    result = tf.keras.Sequential()
+    result.add(tf.keras.layers.Conv2DTranspose(filters, kernel, strides=stride, padding='same', use_bias=bias, kernel_initializer=kernel_initializer))
+    result.add(tf.keras.layers.BatchNormalization())
+    if dropout:
+        result.add(tf.keras.layers.Dropout(0.5))
+    result.add(tf.keras.layers.LeakyReLU())
+    return result

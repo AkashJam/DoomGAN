@@ -49,14 +49,14 @@ class WADFeatureExtractor(object):
         height_levels = sorted({s['lump']['floor_height'] for s in level_dict['sectors'].values()})
         scale_color = lambda x, levels, a, b: int((levels.index(x)+1)*(b-a)/len(levels))
         # sectormap = np.zeros(mapsize_px, dtype=np.uint8)
-        ceilingtexturemap = np.zeros(mapsize_px, dtype=np.uint8)
-        floortexturemap = np.zeros(mapsize_px, dtype=np.uint8)
+        texturemaps = dict()
+        texturemaps['ceilingtexturemap'] = np.zeros(mapsize_px, dtype=np.uint8)
+        texturemaps['floortexturemap'] = np.zeros(mapsize_px, dtype=np.uint8)
+        texturemaps['leftwalltexturemap'] = np.zeros(mapsize_px, dtype=np.uint8)
+        texturemaps['rightwalltexturemap'] = np.zeros(mapsize_px, dtype=np.uint8)
+        # texturemaps['walltextmapsize_px'] = np.insert(mapsize_px,len(mapsize_px),3) # If walls are not only simple
 
-        leftwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
-        rightwalltexturemap = np.zeros(mapsize_px, dtype=np.uint8)
-        # walltextmapsize_px = np.insert(mapsize_px,len(mapsize_px),3) # If walls are not only simple
-
-        save_path = '../dataset/parsed/doom/graphics.json'
+        save_path = 'dataset/parsed/doom/graphics.json'
         if os.path.isfile(save_path):
             with open(save_path, 'r') as jsonfile:
                 texture_info = json.load(jsonfile)
@@ -76,8 +76,8 @@ class WADFeatureExtractor(object):
 
             heightmap[px, py] = color
             # sectormap[px, py] = i
-            floortexturemap[px, py] = texture_info['flats'][sector['lump']['floor_flat']]
-            ceilingtexturemap[px, py] = texture_info['flats'][sector['lump']['ceiling_flat']]
+            texturemaps['floortexturemap'][px, py] = texture_info['flats'][sector['lump']['floor_flat']]
+            texturemaps['ceilingtexturemap'][px, py] = texture_info['flats'][sector['lump']['ceiling_flat']]
             # TAGMAP GENERATION (intermediate TRIGGERMAP: Sectors referenced by a trigger)
             tag = sector['lump']['tag']
             tag = tag if tag < 63 else 63
@@ -99,18 +99,18 @@ class WADFeatureExtractor(object):
             sx, sy = self._rescale_coord(start[0], start[1],wad_features)
             ex, ey = self._rescale_coord(end[0], end[1], wad_features)
             lx, ly = draw.line(sx, sy, ex, ey)
-            rightwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['middle_texture']]
+            texturemaps['rightwalltexturemap'][lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['middle_texture']]
             if line['left_sidedef'] == -1: # If no sector on the other side
                 # It's a wall
                 wallmap[lx, ly] = 255
-                leftwalltexturemap[lx,ly] = 0
+                texturemaps['leftwalltexturemap'][lx,ly] = 0
             else:
-                leftwalltexturemap[lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['middle_texture']]
+                texturemaps['leftwalltexturemap'][lx,ly] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['middle_texture']]
                 # to be added if taking into account the upper and lower wall textures in non simple structures
-                # leftwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['upper_texture']]
-                # leftwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['lower_texture']]
-            # rightwalltexturemap[lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['upper_texture']]
-            # rightwalltexturemap[lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['lower_texture']]
+                # texturemaps['leftwalltexturemap'][lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['upper_texture']]
+                # texturemaps['leftwalltexturemap'][lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['left_sidedef']]['lower_texture']]
+            # texturemaps['rightwalltexturemap'][lx,ly,0] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['upper_texture']]
+            # texturemaps['rightwalltexturemap'][lx,ly,2] = texture_info['textures'][level_dict['lumps']['SIDEDEFS'][line['right_sidedef']]['lower_texture']]
             linedef_type = LinedefTypes.get_index_from_type(line['types'])
             trigger = line['trigger']
             # clamping the trigger tag to [1,64] (otherwise the encoding will overflow)
@@ -145,7 +145,7 @@ class WADFeatureExtractor(object):
                 if linedef_type in [10,12,14,16, 255]:
                     # It's a local door or an exit. Simply color the linedefs
                     triggermap[lx, ly] = linedef_type
-        return wallmap, heightmap, triggermap, floortexturemap, ceilingtexturemap, rightwalltexturemap, leftwalltexturemap
+        return wallmap, heightmap, triggermap, texturemaps
 
     def draw_thingsmap(self, level_dict, wad_features, mapsize_px):
         # For segregating individual things type
@@ -274,7 +274,7 @@ class WADFeatureExtractor(object):
         mapsize_px = [256, 256]
         # computing these maps require the knowledge of the level width and height
         #tag_map is an intermediate map needed to build the trigger map
-        maps['wallmap'], maps['heightmap'], maps['triggermap'], maps['floortexturemap'], maps['ceilingtexturemap'], maps['rightwalltexturemap'], maps['leftwalltexturemap'] = self.draw_sector_maps(level_dict, mapsize_px, wad_features)
+        maps['wallmap'], maps['heightmap'], maps['triggermap'], maps['texturemap'] = self.draw_sector_maps(level_dict, mapsize_px, wad_features)
         maps['thingsmap'] = self.draw_thingsmap(level_dict, wad_features, mapsize_px)
         enumerated_floors, wad_features['floors'] = label(maps['heightmap']>0, connectivity=2, return_num=True)
         maps['floormap'] = enumerated_floors.astype(np.uint8)

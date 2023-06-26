@@ -1,6 +1,35 @@
 # Parser
-Handles the translation of DOOM WADs into a set of feature maps as well as the conversion of the +
+Handles the translation of DOOM WADs into a set of feature maps as well as the conversion of the 
 
+reader = WADReader()
+wad_with_features = reader.extract('../dataset/scraped/doom/grendel1/GRENDEL1.WAD')
+maps = wad_with_features["levels"][0]["maps"]
+plt.subplots(2,4,tight_layout=True)
+plt.subplot(2,4,1)
+plt.imshow(maps["floormap"], cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,2)
+plt.imshow(maps["heightmap"], cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,3)
+plt.imshow(maps["wallmap"], cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,4)
+plt.imshow(maps["thingsmap"]["monsters"]+(maps["thingsmap"]["monsters"]>0).astype(int)*128, cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,5)
+plt.imshow(maps["thingsmap"]["ammunitions"]+(maps["thingsmap"]["ammunitions"]>0).astype(int)*128, cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,6)
+plt.imshow(maps["thingsmap"]["powerups"]+(maps["thingsmap"]["powerups"]>0).astype(int)*128, cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,7)
+plt.imshow(maps["thingsmap"]["artifacts"]+(maps["thingsmap"]["artifacts"]>0).astype(int)*128, cmap='gray')
+plt.axis('off')
+plt.subplot(2,4,8)
+plt.imshow(maps["thingsmap"]["weapons"]+(maps["thingsmap"]["weapons"]>0).astype(int)*128, cmap='gray')
+plt.axis('off')
+plt.show()
 
 ZenNode is used in the final process to generate the remaining aspects of the DOOM WAD to be playable by the DOOM engine such as predefined computation like the BLOCKMAP and REJECT lumps
 ```
